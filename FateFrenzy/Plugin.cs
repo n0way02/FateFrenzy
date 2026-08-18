@@ -172,19 +172,28 @@ public sealed class Plugin : IDalamudPlugin
         {
             Task.Run(async () =>
             {
-                Log.Info("[FateFrenzy] Login transition detected. Waiting for player character to stabilize...");
-                // Give it one more second to make sure UI and zones are fully loaded
-                await Task.Delay(1000);
-
-                _ = Svc.Framework.RunOnFrameworkThread(() =>
+                Log.Info("[FateFrenzy] Login transition detected. Waiting for player character to load...");
+                for (int i = 0; i < 30; i++)
                 {
-                    var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
-                    if (zonesToRun.Count > 0)
+                    await Task.Delay(1000);
+                    if (Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null)
                     {
-                        Log.Info("[FateFrenzy] Auto-starting after login...");
-                        Controller.RunAll(zonesToRun);
+                        // Give it one more second to make sure UI and zones are fully loaded
+                        await Task.Delay(1000);
+
+                        _ = Svc.Framework.RunOnFrameworkThread(() =>
+                        {
+                            var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
+                            if (zonesToRun.Count > 0)
+                            {
+                                Log.Info("[FateFrenzy] Auto-starting after login...");
+                                Controller.RunAll(zonesToRun);
+                            }
+                        });
+                        return;
                     }
-                });
+                }
+                Log.Warning("[FateFrenzy] Player character failed to load within 30 seconds. Auto-start aborted.");
             });
         }
     }
@@ -201,7 +210,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnFrameworkUpdate(IFramework framework)
     {
-        var isLoggedIn = Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null;
+        var isLoggedIn = Svc.ClientState.IsLoggedIn;
 
         if (wasLoggedInLastFrame is null)
         {
