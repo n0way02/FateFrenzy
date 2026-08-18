@@ -18,7 +18,7 @@ public sealed class AboutWindow : Window, IDisposable
     private const string IconFile = "Icon.png";
     private const string WindowId = "FateFrenzyAbout";
 
-    private const string SponsorUrl = "https://github.com/n0way02";
+    private const string SponsorUrl = "https://ko-fi.com/n0way02";
     private const string HubUrl = "https://github.com/n0way02/FateFrenzy";
     private const string Author = "n0way02";
 
@@ -416,7 +416,7 @@ public sealed class AboutWindow : Window, IDisposable
         dl.AddRect(origin, end, ImGui.GetColorU32(new Vector4(1f, 1f, 1f, hover ? 0.42f : 0.18f)),
             rounding, ImDrawFlags.None, 1f);
 
-        const string label = "Become a Sponsor";
+        const string label = "Support me on Ko-fi";
         var iconStr = FontAwesomeIcon.HandHoldingHeart.ToIconString();
         Vector2 iconSize;
         using (ImRaii.PushFont(UiBuilder.IconFont))
@@ -447,7 +447,7 @@ public sealed class AboutWindow : Window, IDisposable
         if (!hover) return;
         ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
         using (ImRaii.Tooltip())
-            ImGui.TextUnformatted("Open GitHub Sponsors · right-click to copy");
+            ImGui.TextUnformatted("Open Ko-fi · right-click to copy");
         if (ImGui.IsMouseClicked(ImGuiMouseButton.Left)) OpenUrl(SponsorUrl);
         else if (ImGui.IsMouseClicked(ImGuiMouseButton.Right)) ImGui.SetClipboardText(SponsorUrl);
     }
