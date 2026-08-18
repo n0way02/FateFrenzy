@@ -1,5 +1,6 @@
 using FateFrenzy.Core.Game.Player;
 using ECommons;
+using ECommons.Automation;
 using ECommons.DalamudServices;
 using ECommons.Throttlers;
 using ECommons.UIHelpers.AddonMasterImplementations;
@@ -183,6 +184,36 @@ internal static unsafe class RepairOps
         var agent = AgentModule.Instance()->GetAgentByInternalId(AgentId.Repair);
         if (agent is null) return;
         agent->Hide();
+    }
+
+    public static void CleanUpAllMenus()
+    {
+        // 1. Close Repair window
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.Repair, out var rep) && GenericHelpers.IsAddonReady(rep))
+        {
+            Callback.Fire(rep, true, -1);
+        }
+
+        // 2. Close SelectIconString
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectIconString, out var sis) && GenericHelpers.IsAddonReady(sis))
+        {
+            Callback.Fire(sis, true, -1);
+        }
+
+        // 3. Close SelectString
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectString, out var ss) && GenericHelpers.IsAddonReady(ss))
+        {
+            Callback.Fire(ss, true, -1);
+        }
+
+        // 4. Close Talk window
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("Talk", out var talk) && GenericHelpers.IsAddonReady(talk))
+        {
+            Callback.Fire(talk, true, -1);
+        }
+
+        // Hide repair agent just in case
+        HideRepairAgent();
     }
 
     public record struct GcMender(uint TerritoryId, Vector3 Position, uint DataId, string Name);

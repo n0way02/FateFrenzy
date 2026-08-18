@@ -156,6 +156,7 @@ public sealed class AutoRepair : AutoCommon
         }
 
         await DriveRepairAddon();
+        RepairOps.CleanUpAllMenus();
     }
 
     private async Task<bool> DriveRepairAddon()
@@ -168,21 +169,21 @@ public sealed class AutoRepair : AutoCommon
         if (!RepairOps.ClickRepairAll())
         {
             Diag("ClickRepairAll returned false; addon disappeared between checks.");
-            RepairOps.HideRepairAgent();
+            RepairOps.CleanUpAllMenus();
             return false;
         }
 
         if (!await WaitUntilTimed(RepairOps.SelectYesnoOpen, YesnoWaitMs, "wait-repair-yesno"))
         {
             Diag("SelectYesno never appeared — RepairAll button likely disabled (no materials/affordability).");
-            RepairOps.HideRepairAgent();
+            RepairOps.CleanUpAllMenus();
             return false;
         }
 
         if (!RepairOps.ClickSelectYesno())
         {
             Diag("ClickSelectYesno returned false; addon disappeared between checks.");
-            RepairOps.HideRepairAgent();
+            RepairOps.CleanUpAllMenus();
             return false;
         }
 
@@ -199,7 +200,7 @@ public sealed class AutoRepair : AutoCommon
             await NextFrame(60);
         }
 
-        RepairOps.HideRepairAgent();
+        RepairOps.CleanUpAllMenus();
         return RepairOps.LowestEquippedConditionPct() > Plugin.Cfg.AutoRepairThresholdPct + SelfRepairSuccessMarginPct;
     }
 }
