@@ -172,47 +172,50 @@ internal sealed partial class AutoFateController
             {
                 try
                 {
-                    string? playerName = null;
-                    string? serverName = null;
-                    string? currentServer = null;
-                    string? currentMap = null;
-
-                    var taskCompletion = new TaskCompletionSource<bool>();
-                    _ = Svc.Framework.RunOnFrameworkThread(() =>
+                    if (clib.Services.Svc.Automation.Running && !Paused && session is not null)
                     {
-                        try
+                        string? playerName = null;
+                        string? serverName = null;
+                        string? currentServer = null;
+                        string? currentMap = null;
+
+                        var taskCompletion = new TaskCompletionSource<bool>();
+                        _ = Svc.Framework.RunOnFrameworkThread(() =>
                         {
-                            var pc = Svc.Objects.LocalPlayer;
-                            if (pc is not null)
+                            try
                             {
-                                playerName = pc.Name.ToString();
-                                serverName = pc.HomeWorld.Value.Name.ToString();
-                                currentServer = pc.CurrentWorld.Value.Name.ToString();
+                                var pc = Svc.Objects.LocalPlayer;
+                                if (pc is not null)
+                                {
+                                    playerName = pc.Name.ToString();
+                                    serverName = pc.HomeWorld.Value.Name.ToString();
+                                    currentServer = pc.CurrentWorld.Value.Name.ToString();
 
-                                var currentTerritory = Svc.ClientState.TerritoryType;
-                                var currentZone = ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == currentTerritory);
-                                currentMap = currentZone?.Name ?? (activeZones.Count > 0 ? activeZones[0].Name : "Unknown");
+                                    var currentTerritory = Svc.ClientState.TerritoryType;
+                                    var currentZone = ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == currentTerritory);
+                                    currentMap = currentZone?.Name ?? (activeZones.Count > 0 ? activeZones[0].Name : "Unknown");
+                                }
+                                taskCompletion.SetResult(true);
                             }
-                            taskCompletion.SetResult(true);
-                        }
-                        catch (Exception ex)
+                            catch (Exception ex)
+                            {
+                                taskCompletion.SetException(ex);
+                            }
+                        });
+
+                        await taskCompletion.Task;
+
+                        if (playerName is not null)
                         {
-                            taskCompletion.SetException(ex);
+                            var annotatedName = playerName + " (plugin)";
+                            var gemsFarmed = s.GemstonesEarned;
+
+                            var json = $"{{\"playerName\": \"{annotatedName}\", \"serverName\": \"{serverName}\", \"currentServer\": \"{currentServer}\", \"currentMap\": \"{currentMap}\", \"gemstonesFarmed\": {gemsFarmed}}}";
+                            var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                            
+                            var response = await client.PostAsync("https://y-kohl-omega.vercel.app/api/track", content, token);
+                            Diag($"Telemetry ping sent: status={response.StatusCode}");
                         }
-                    });
-
-                    await taskCompletion.Task;
-
-                    if (playerName is not null)
-                    {
-                        var annotatedName = playerName + " (plugin)";
-                        var gemsFarmed = s.GemstonesEarned;
-
-                        var json = $"{{\"playerName\": \"{annotatedName}\", \"serverName\": \"{serverName}\", \"currentServer\": \"{currentServer}\", \"currentMap\": \"{currentMap}\", \"gemstonesFarmed\": {gemsFarmed}}}";
-                        var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
-                        
-                        var response = await client.PostAsync("https://y-kohl-omega.vercel.app/api/track", content, token);
-                        Diag($"Telemetry ping sent: status={response.StatusCode}");
                     }
                 }
                 catch (Exception ex)
@@ -232,7 +235,7 @@ internal sealed partial class AutoFateController
         }, token);
     }
 
-    private void StopTelemetry()
+    internal void StopTelemetry()
     {
         telemetryCts?.Cancel();
         telemetryCts = null;

@@ -117,6 +117,8 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        Controller.StopTelemetry();
+
         TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
 
         Svc.ClientState.Login -= OnLogin;
