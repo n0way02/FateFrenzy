@@ -343,7 +343,6 @@ public sealed partial class AutoFate
                 && live <= reachMeters;
         }
 
-        ClearActiveCombatPreset();
         var op = new MoveOp(o => o.MoveInZone(dest, config, InRangeOrGone));
         await RunCancellable(op, EngageRepositionWatchdogMs, $"engage-reposition-{fateId}",
             StuckDetector.IdleStallAbort(StuckDetector.IdleStallTimeoutMs));
