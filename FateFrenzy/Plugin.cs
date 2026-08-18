@@ -237,6 +237,13 @@ public sealed class Plugin : IDalamudPlugin
 
     private unsafe void ClickSelectOkIfOpen()
     {
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("_CharaSelectCharacter", out _) ||
+            GenericHelpers.TryGetAddonByName<AtkUnitBase>("_CharaSelectHeader", out _) ||
+            GenericHelpers.TryGetAddonByName<AtkUnitBase>("_CharaSelectWorld", out _))
+        {
+            return;
+        }
+
         if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("SelectOk", out var addon) && GenericHelpers.IsAddonReady(addon))
         {
             new AddonMaster.SelectOk(addon).Ok();
