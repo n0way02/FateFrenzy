@@ -2,7 +2,9 @@ using FateFrenzy.Core.External;
 using FateFrenzy.Core.Game.Player;
 using FateFrenzy.Core.Trading;
 using FateFrenzy.Core.Zones;
+using FateFrenzy.Core.Ipc;
 using clib.Services;
+using ECommons.Automation;
 
 namespace FateFrenzy.Core.Tasks;
 
@@ -89,6 +91,11 @@ internal sealed partial class AutoFateController
 
         ApplyStartingClass();
         StartFateGrind(0, s);
+
+        if (ExternalPlugins.IsInstalled(ExternalPlugin.TextAdvance) && !TextAdvanceIPC.IsPluginEnabled())
+        {
+            Chat.ExecuteCommand("/at");
+        }
     }
 
     private static void ApplyStartingClass()
@@ -118,6 +125,12 @@ internal sealed partial class AutoFateController
         grindTask = null;
         PauseReason = PauseReason.None;
         Svc.Automation.Stop();
+
+        if (ExternalPlugins.IsInstalled(ExternalPlugin.TextAdvance) && TextAdvanceIPC.IsPluginEnabled())
+        {
+            Chat.ExecuteCommand("/at");
+        }
+
         FinalizeRun(ending);
         session = null;
         activeZones = [];

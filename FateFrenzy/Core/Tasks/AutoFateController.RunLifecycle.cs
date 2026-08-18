@@ -1,5 +1,8 @@
 using FateFrenzy.Core.Stats;
+using FateFrenzy.Core.External;
+using FateFrenzy.Core.Ipc;
 using clib.Services;
+using ECommons.Automation;
 using System;
 
 namespace FateFrenzy.Core.Tasks;
@@ -9,6 +12,11 @@ internal sealed partial class AutoFateController
     // Terminal choke point so every end-run path records and returns to Idle.
     private void EndRun(AutoFateSession? s)
     {
+        if (ExternalPlugins.IsInstalled(ExternalPlugin.TextAdvance) && TextAdvanceIPC.IsPluginEnabled())
+        {
+            Chat.ExecuteCommand("/at");
+        }
+
         FinalizeRun(s);
         Phase = AutoPhase.Idle;
         MaybeRunAfterAction(s);
