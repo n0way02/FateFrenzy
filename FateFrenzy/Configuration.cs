@@ -34,7 +34,7 @@ public sealed class Configuration : IPluginConfiguration
 
     public string CombatPresetName { get; set; } = Core.AfgConstants.BundledCombatPresetName;
 
-    public string RotationPlugin { get; set; } = "Any"; // Any / Wrath / RotationSolver / BossMod / BossModReborn
+    public string RotationPlugin { get; set; } = "RotationSolver"; // Any / Wrath / RotationSolver / BossMod / BossModReborn
     public string DodgingPlugin { get; set; } = "BossModReborn"; // Any / BossMod / BossModReborn / None
 
     public bool EnableMultiZone { get; set; } = false;
