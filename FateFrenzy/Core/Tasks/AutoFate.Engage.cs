@@ -325,7 +325,7 @@ public sealed partial class AutoFate
         var tolerance = reach.Meters <= EngageMeleeReachMeters
             ? EngageMeleeApproachToleranceMeters
             : EngageRangedApproachToleranceMeters;
-        var config = MovementConfig.GroundMove.WithTolerance(tolerance);
+        var config = MovementConfig.GroundMove.WithOptions(MovementOptions.Dismount).WithTolerance(tolerance);
         var reachMeters = reach.Meters;
 
         bool InRangeOrGone()
