@@ -75,11 +75,11 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(AfgConstants.PrimaryCommand, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Toggle the FateFrenzy window. /afg config | stats | deps | about | pause (pause or resume the run) | target (dump current target's BaseId)."
+            HelpMessage = "Toggle the FateFrenzy window. /fatefrenzy config | stats | deps | about | pause (pause or resume the run) | target (dump current target's BaseId)."
         });
         CommandManager.AddHandler(AfgConstants.AliasCommand, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Alias for /afg."
+            HelpMessage = "Alias for /fatefrenzy."
         });
 
         PluginInterface.UiBuilder.Draw += WindowSystem.Draw;

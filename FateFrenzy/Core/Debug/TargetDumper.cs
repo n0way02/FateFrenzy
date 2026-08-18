@@ -19,7 +19,7 @@ internal static unsafe class TargetDumper
         var target = TargetSystem.Instance()->Target;
         if (target == null)
         {
-            Svc.Chat.Print($"{AfgConstants.LogPrefix} No target. Click an NPC or FATE marker first, then re-run /afg target.");
+            Svc.Chat.Print($"{AfgConstants.LogPrefix} No target. Click an NPC or FATE marker first, then re-run /ff target.");
             return;
         }
 

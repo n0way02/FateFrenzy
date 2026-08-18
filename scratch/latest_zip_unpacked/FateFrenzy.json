@@ -1,0 +1,24 @@
+{
+  "Author": "n0way02",
+  "Name": "FateFrenzy",
+  "InternalName": "FateFrenzy",
+  "AssemblyVersion": "1.4.0.0",
+  "Description": "Farms FATEs for you: tick the zones, and the plugin teleports in, finds active FATEs, and runs them in a loop, with Lifestream support for instance, world, and local crystal navigation.",
+  "ApplicableVersion": "any",
+  "RepoUrl": "https://github.com/n0way02/FateFrenzy",
+  "Tags": [
+    "FATE",
+    "Shared FATE",
+    "Bicolor Gemstones",
+    "Date with Destiny",
+    "Automation"
+  ],
+  "DalamudApiLevel": 15,
+  "LoadRequiredState": 0,
+  "LoadSync": false,
+  "CanUnloadAsync": false,
+  "LoadPriority": 0,
+  "IconUrl": "https://raw.githubusercontent.com/n0way02/FateFrenzy/master/FateFrenzy/Images/Icon.png",
+  "Punchline": "FATEs, farmed for you with frenzy!",
+  "AcceptsFeedback": true
+}

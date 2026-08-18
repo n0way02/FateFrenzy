@@ -29,7 +29,7 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
 
     private static readonly Random rng = new();
 
-    // User-tunable knobs come straight from config so a /afg config edit mid-break takes effect on the
+    // User-tunable knobs come straight from config so a /ff config edit mid-break takes effect on the
     // next hop. Snapped at use, not at construction, for the same reason.
     private static (int minMs, int maxMs) PauseRangeMs()
     {

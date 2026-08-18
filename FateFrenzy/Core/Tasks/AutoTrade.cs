@@ -26,7 +26,7 @@ public sealed class AutoTrade(uint targetItemId, uint originTerritoryId, Expansi
     protected override async Task Execute()
     {
         var item = GemstoneCatalog.FindById(targetItemId);
-        ErrorIf(item is null, "No target item set. Open /afg config → Trader and pick one.");
+        ErrorIf(item is null, "No target item set. Open /ff config → Trader and pick one.");
 
         var trader = GemstoneTrader.PickForItem(targetItemId, originTerritoryId, originExpansion);
         ErrorIf(trader is null, $"No registered Bicolor trader sells {item!.ItemName}.");

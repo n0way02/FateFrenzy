@@ -11,11 +11,11 @@
 
   <PropertyGroup Label="Identity">
     <Version>1.4.0.0</Version>
-    <Authors>XeldarAlz</Authors>
-    <Copyright>Copyright (c) XeldarAlz</Copyright>
-    <PackageProjectUrl>https://github.com/XeldarAlz/FFXIV-AutoFATEGrind</PackageProjectUrl>
+    <Authors>n0way02</Authors>
+    <Copyright>Copyright (c) n0way02</Copyright>
+    <PackageProjectUrl>https://github.com/n0way02/FateFrenzy</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/XeldarAlz/FFXIV-AutoFATEGrind</RepositoryUrl>
+    <RepositoryUrl>https://github.com/n0way02/FateFrenzy</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 

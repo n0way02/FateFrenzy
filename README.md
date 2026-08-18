@@ -50,14 +50,14 @@ For FateFrenzy to operate fully, you should have the following Dalamud plugins i
 2. Open the solution file `FateFrenzy.sln` and compile the project using Visual Studio or Rider.
 3. Add the compiled `FateFrenzy.dll` path as a developer plugin in Dalamud.
 4. Open the plugin interface in-game with:
-   - `/afg` (primary command)
-   - `/fategrind` (alias)
+   - `/fatefrenzy` (primary command)
+   - `/ff` (alias)
 
 ### Command Parameters:
-- `/afg config` — Open configuration settings.
-- `/afg stats` — Open run history and statistics.
-- `/afg deps` — Open dependency checker.
-- `/afg pause` — Pauses or resumes the active loop.
+- `/ff config` — Open configuration settings.
+- `/ff stats` — Open run history and statistics.
+- `/ff deps` — Open dependency checker.
+- `/ff pause` — Pauses or resumes the active loop.
 
 ---
 

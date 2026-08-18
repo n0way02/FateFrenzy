@@ -2,8 +2,8 @@ namespace FateFrenzy.Core;
 
 internal static class AfgConstants
 {
-    public const string PrimaryCommand = "/afg";
-    public const string AliasCommand = "/fategrind";
+    public const string PrimaryCommand = "/fatefrenzy";
+    public const string AliasCommand = "/ff";
 
     public const string BundledCombatPresetName = "FateFrenzy";
 
