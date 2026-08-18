@@ -1,9 +1,11 @@
 --[=====[
 [[SND Metadata]]
 author: n0way (fork from pot0to script)
-version: 3.2.0
+version: 3.2.1
 description: >-
   Fate farming script with the following features:
+
+  - *[NEW - 3.2.1]* Added startup chat notice for the new native C# plugin counterpart (FateFrenzy).
 
   - *[NEW - 3.2.0]* Added initial Critical Engagement (CE) support database and zone death handlers (development in progress) and optimized local Aetheryte interaction speed.
 
@@ -188,6 +190,8 @@ configs:
 *                                  Changelog                                   *
 ********************************************************************************
 
+    -> 3.2.1    by: n0way02 (https://ko-fi.com/n0way02)
+                Added a startup chat notice with the custom repository link to download the native C# plugin counterpart (FateFrenzy).
     -> 3.2.0    by: n0way02 (https://ko-fi.com/n0way02)
                 Added initial Critical Engagement (CE) support database and zone death handlers for Occult Crescent (development in progress).
                 Optimized local Aetheryte teleportation speeds (reduced loading/check delays).
@@ -4137,7 +4141,11 @@ end)
 Dalamud.Log("[FATE Tracker] Script carregado e variáveis iniciais definidas!")
 SessionGemstonesFarmed = 0
 LastFrameGemstoneCount = Inventory.GetItemCount(26807)
-LastGcTime = 0
+yield("/echo [FATE] --------------------------------------------------")
+yield("/echo [FATE] >>> FATE FRENZY PLUGIN IS OUT! <<<")
+yield("/echo [FATE] Check out the native, crash-free C# plugin counterpart:")
+yield("/echo [FATE] Repo: https://raw.githubusercontent.com/n0way02/FateFrenzy/main/repo/pluginmaster.json")
+yield("/echo [FATE] --------------------------------------------------")
 
 while not StopScript do
     local nearestFate = Fates.GetNearestFate()
