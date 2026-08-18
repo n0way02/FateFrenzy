@@ -130,6 +130,9 @@ public sealed class Configuration : IPluginConfiguration
     public PartyInviteReplyChannel DeclineInviteReplyChannel { get; set; } = PartyInviteReplyChannel.Tell;
     public string DeclineInviteReplyMessage { get; set; } = "";
 
+    public bool CompletedTutorial { get; set; } = false;
+    public string TutorialLanguage { get; set; } = "en";
+
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
 
     public void SaveDebounced()

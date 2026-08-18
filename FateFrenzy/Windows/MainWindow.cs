@@ -36,8 +36,18 @@ public sealed class MainWindow : Window, IDisposable
 
         DependencyBanner.Draw(plugin);
 
-        if (ctrl.Running) RunningPanel.Draw(cfg, ctrl);
-        else              DrawIdle(cfg, ctrl);
+        if (!cfg.CompletedTutorial)
+        {
+            Tutorial.Draw(plugin);
+        }
+        else if (ctrl.Running)
+        {
+            RunningPanel.Draw(cfg, ctrl);
+        }
+        else
+        {
+            DrawIdle(cfg, ctrl);
+        }
     }
 
     private void DrawIdle(Configuration cfg, AutoFateController ctrl)
