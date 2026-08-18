@@ -1,9 +1,11 @@
 --[=====[
 [[SND Metadata]]
 author: n0way (fork from pot0to script)
-version: 3.2.1
+version: 3.2.2
 description: >-
   Fate farming script with the following features:
+
+  - *[NEW - 3.2.2]* Fixed a startup initialization crash (LastGcTime nil error).
 
   - *[NEW - 3.2.1]* Added startup chat notice for the new native C# plugin counterpart (FateFrenzy).
 
@@ -190,6 +192,8 @@ configs:
 *                                  Changelog                                   *
 ********************************************************************************
 
+    -> 3.2.2    by: n0way02 (https://ko-fi.com/n0way02)
+                Fixed a startup initialization crash where LastGcTime was not initialized.
     -> 3.2.1    by: n0way02 (https://ko-fi.com/n0way02)
                 Added a startup chat notice with the custom repository link to download the native C# plugin counterpart (FateFrenzy).
     -> 3.2.0    by: n0way02 (https://ko-fi.com/n0way02)
