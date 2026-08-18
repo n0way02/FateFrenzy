@@ -1,6 +1,6 @@
 # FateFrenzy ⚡
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: AGPL 3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![Dalamud: API 14](https://img.shields.io/badge/Dalamud-API%2014-blue.svg)](https://dalamud.dev/)
 
 **FateFrenzy** is an advanced, fully-automated FATE farming plugin for Final Fantasy XIV (Dalamud). It features a modern, custom-designed Holographic Neon Cyan user interface that coordinates movement, combat, instances, and cross-server world hops in a unified, hands-off loop.
@@ -61,5 +61,12 @@ For FateFrenzy to operate fully, you should have the following Dalamud plugins i
 
 ---
 
+## Credits & Source 📝
+This project is a modified fork of the original **FFXIV-AutoFATEGrind** plugin developed by [XeldarAlz](https://github.com/XeldarAlz).
+- Original Repository: [XeldarAlz/FFXIV-AutoFATEGrind](https://github.com/XeldarAlz/FFXIV-AutoFATEGrind)
+- In compliance with the copyleft terms of the **AGPL-3.0-or-later** license, this repository is open-source and publicly accessible.
+
+---
+
 ## License 📄
-This project is licensed under the MIT License.
+This project is licensed under the AGPL-3.0-or-later License.
