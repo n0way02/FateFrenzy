@@ -46,7 +46,7 @@ public sealed class Plugin : IDalamudPlugin
     internal LiveFateWindow LiveFateWindow { get; }
 
     private readonly EventHandler<UnobservedTaskExceptionEventArgs> unobservedTaskHandler;
-    private bool wasLoggedInLastFrame = false;
+    private bool? wasLoggedInLastFrame = null;
 
     public Plugin()
     {
@@ -93,7 +93,6 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
 
-        wasLoggedInLastFrame = Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null;
         Svc.Framework.Update += OnFrameworkUpdate;
     }
 
@@ -204,11 +203,17 @@ public sealed class Plugin : IDalamudPlugin
     {
         var isLoggedIn = Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null;
 
-        if (isLoggedIn && !wasLoggedInLastFrame)
+        if (wasLoggedInLastFrame is null)
+        {
+            wasLoggedInLastFrame = isLoggedIn;
+            return;
+        }
+
+        if (isLoggedIn && !wasLoggedInLastFrame.Value)
         {
             OnPlayerLoggedIn();
         }
-        else if (!isLoggedIn && wasLoggedInLastFrame)
+        else if (!isLoggedIn && wasLoggedInLastFrame.Value)
         {
             OnPlayerLoggedOut();
         }
