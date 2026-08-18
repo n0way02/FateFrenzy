@@ -12,6 +12,7 @@ using Dalamud.Game.ClientState.Conditions;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
+using System;
 using System.Numerics;
 using System.Threading.Tasks;
 using CSFateManager = FFXIVClientStructs.FFXIV.Client.Game.Fate.FateManager;
@@ -167,6 +168,8 @@ public sealed partial class AutoFate
                 if (IsPlayerKO()) break;
                 fate = refreshed;
                 sawRunning = true;
+
+                TargetForlornIfPresent();
 
                 if (Svc.Condition[ConditionFlag.InCombat])
                     lastInCombatAtMs = Environment.TickCount64;
@@ -414,6 +417,31 @@ public sealed partial class AutoFate
         Diag($"Gemstone threshold {Plugin.Cfg.TradeThreshold}g reached: queueing auto-trade for {qty}× {target.ItemName} at {trader.Name} (territory {trader.TerritoryId}).");
         session.PendingTradeFromZone = zone;
         return true;
+    }
+
+    private static void TargetForlornIfPresent()
+    {
+        var player = Svc.Objects.LocalPlayer;
+        if (player is null) return;
+
+        foreach (var obj in Svc.Objects)
+        {
+            if (obj is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc) continue;
+            if (!battleNpc.IsTargetable) continue;
+            if (battleNpc.CurrentHp == 0) continue;
+
+            var name = battleNpc.Name.ToString();
+            if (name.Equals("Forlorn Maiden", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("The Forlorn", StringComparison.OrdinalIgnoreCase))
+            {
+                if (Svc.Targets.Target?.Address != battleNpc.Address)
+                {
+                    Svc.Targets.Target = battleNpc;
+                    Svc.Chat.Print("[FateFrenzy] Found Forlorn! Target switched.");
+                    break;
+                }
+            }
+        }
     }
 
 }
