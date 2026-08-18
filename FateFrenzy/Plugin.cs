@@ -174,7 +174,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnLogin()
     {
-        if (Configuration.AutoResumeAfterDisconnect && Configuration.WasRunningBeforeDisconnect)
+        if (Configuration.AutoResumeAfterDisconnect)
         {
             Task.Run(async () =>
             {
@@ -189,20 +189,17 @@ public sealed class Plugin : IDalamudPlugin
 
                         _ = Svc.Framework.RunOnFrameworkThread(() =>
                         {
-                            if (Configuration.WasRunningBeforeDisconnect)
+                            var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
+                            if (zonesToRun.Count > 0)
                             {
-                                var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
-                                if (zonesToRun.Count > 0)
-                                {
-                                    Log.Info("[FateFrenzy] Auto-resuming after disconnect/startup...");
-                                    Controller.RunAll(zonesToRun);
-                                }
+                                Log.Info("[FateFrenzy] Auto-starting after login...");
+                                Controller.RunAll(zonesToRun);
                             }
                         });
                         return;
                     }
                 }
-                Log.Warning("[FateFrenzy] Player character failed to load within 30 seconds. Auto-resume aborted.");
+                Log.Warning("[FateFrenzy] Player character failed to load within 30 seconds. Auto-start aborted.");
             });
         }
     }
@@ -213,13 +210,6 @@ public sealed class Plugin : IDalamudPlugin
         {
             if (Controller.SessionSnapshot is not null)
             {
-                if (!Configuration.WasRunningBeforeDisconnect)
-                {
-                    Log.Info("[FateFrenzy] Disconnect detected while grinding! Setting WasRunningBeforeDisconnect = true.");
-                    Configuration.WasRunningBeforeDisconnect = true;
-                    Configuration.Save();
-                }
-
                 clib.Services.Svc.Automation.Stop();
                 Controller.AbortOnDisconnect();
             }
