@@ -178,22 +178,31 @@ public sealed class Plugin : IDalamudPlugin
         {
             Task.Run(async () =>
             {
-                await Task.Delay(5000); // 5 second delay to let the game load fully
-                if (Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null)
+                Log.Info("[FateFrenzy] Login detected. Waiting for player character to load...");
+                for (int i = 0; i < 30; i++)
                 {
-                    _ = Svc.Framework.RunOnFrameworkThread(() =>
+                    await Task.Delay(1000);
+                    if (Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null)
                     {
-                        if (Configuration.WasRunningBeforeDisconnect)
+                        // Give it one more second to make sure UI and zones are ready
+                        await Task.Delay(1000);
+
+                        _ = Svc.Framework.RunOnFrameworkThread(() =>
                         {
-                            var zonesToRun = ZoneRegistry.Zones.Where(z => Configuration.SelectedZones.Contains(z.TerritoryId)).ToList();
-                            if (zonesToRun.Count > 0)
+                            if (Configuration.WasRunningBeforeDisconnect)
                             {
-                                Log.Info("[FateFrenzy] Auto-resuming after disconnect/startup...");
-                                Controller.RunAll(zonesToRun);
+                                var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
+                                if (zonesToRun.Count > 0)
+                                {
+                                    Log.Info("[FateFrenzy] Auto-resuming after disconnect/startup...");
+                                    Controller.RunAll(zonesToRun);
+                                }
                             }
-                        }
-                    });
+                        });
+                        return;
+                    }
                 }
+                Log.Warning("[FateFrenzy] Player character failed to load within 30 seconds. Auto-resume aborted.");
             });
         }
     }
@@ -202,9 +211,15 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (!Svc.ClientState.IsLoggedIn)
         {
-            if (clib.Services.Svc.Automation.Running)
+            if (Controller.Phase != AutoPhase.Idle)
             {
-                Log.Warning("[FateFrenzy] Player logged out while automation was active! Aborting tasks to prevent crash.");
+                if (!Configuration.WasRunningBeforeDisconnect)
+                {
+                    Log.Info("[FateFrenzy] Disconnect detected while grinding! Setting WasRunningBeforeDisconnect = true.");
+                    Configuration.WasRunningBeforeDisconnect = true;
+                    Configuration.Save();
+                }
+
                 clib.Services.Svc.Automation.Stop();
                 Controller.AbortOnDisconnect();
             }

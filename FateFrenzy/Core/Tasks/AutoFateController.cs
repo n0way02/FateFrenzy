@@ -153,6 +153,7 @@ internal sealed partial class AutoFateController
     {
         currentTask = null;
         grindTask = null;
+        Phase = AutoPhase.Idle;
     }
 
     private System.Threading.CancellationTokenSource? telemetryCts;
