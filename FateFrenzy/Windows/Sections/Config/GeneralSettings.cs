@@ -57,6 +57,12 @@ internal static class GeneralSettings
             SettingsControls.ToggleWidth,
             () => SettingsControls.DrawToggle(cfg, () => cfg.AutoResumeOnFault, v => cfg.AutoResumeOnFault = v, "##gen_autoresume"),
             SettingsRow.ToggleHeight);
+
+        SettingsRow.Draw("Auto-resume after disconnect",
+            "Automatically dismiss FFXIV disconnect error popups to return to the Title Screen, and automatically resume grinding once you log back in (requires EasyLogin/AutoLogin or XIVLauncher Auto-Login).",
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.AutoResumeAfterDisconnect, v => cfg.AutoResumeAfterDisconnect = v, "##gen_autoresume_dc"),
+            SettingsRow.ToggleHeight);
     }
 
     private static void DrawCombatGroup(Configuration cfg)

@@ -81,6 +81,9 @@ internal sealed partial class AutoFateController
 
         PauseReason = PauseReason.None;
 
+        Plugin.Cfg.WasRunningBeforeDisconnect = true;
+        Plugin.Cfg.Save();
+
         var startWallet = GemstoneCatalog.CurrentWalletCount();
         var s = new AutoFateSession
         {
@@ -123,6 +126,9 @@ internal sealed partial class AutoFateController
 
     public void Stop()
     {
+        Plugin.Cfg.WasRunningBeforeDisconnect = false;
+        Plugin.Cfg.Save();
+
         StopTelemetry();
 
         var ending = session;

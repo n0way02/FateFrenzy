@@ -3,6 +3,7 @@ using FateFrenzy.Core.Debug;
 using FateFrenzy.Core.Game.Watchers;
 using FateFrenzy.Core.Stats;
 using FateFrenzy.Core.Tasks;
+using FateFrenzy.Core.Zones;
 using FateFrenzy.Windows;
 using clib;
 using Dalamud.Game.Command;
@@ -11,6 +12,11 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using ECommons;
+using ECommons.DalamudServices;
+using ECommons.UIHelpers.AddonMasterImplementations;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace FateFrenzy;
@@ -85,6 +91,14 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
+
+        Svc.ClientState.Login += OnLogin;
+        Svc.Framework.Update += OnFrameworkUpdate;
+
+        if (Svc.ClientState.IsLoggedIn)
+        {
+            OnLogin();
+        }
     }
 
     // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
@@ -104,6 +118,9 @@ public sealed class Plugin : IDalamudPlugin
     public void Dispose()
     {
         TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
+
+        Svc.ClientState.Login -= OnLogin;
+        Svc.Framework.Update -= OnFrameworkUpdate;
 
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
@@ -152,4 +169,47 @@ public sealed class Plugin : IDalamudPlugin
     public void ToggleAboutUi() => aboutWindow.Toggle();
     public void ToggleDependenciesUi() => dependenciesWindow.Toggle();
     public void ToggleHistoryUi() => runHistoryWindow.Toggle();
+
+    private void OnLogin()
+    {
+        if (Configuration.AutoResumeAfterDisconnect && Configuration.WasRunningBeforeDisconnect)
+        {
+            Task.Run(async () =>
+            {
+                await Task.Delay(5000); // 5 second delay to let the game load fully
+                if (Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null)
+                {
+                    _ = Svc.Framework.RunOnFrameworkThread(() =>
+                    {
+                        if (Configuration.WasRunningBeforeDisconnect)
+                        {
+                            var zonesToRun = ZoneRegistry.Zones.Where(z => Configuration.SelectedZones.Contains(z.TerritoryId)).ToList();
+                            if (zonesToRun.Count > 0)
+                            {
+                                Log.Info("[FateFrenzy] Auto-resuming after disconnect/startup...");
+                                Controller.RunAll(zonesToRun);
+                            }
+                        }
+                    });
+                }
+            });
+        }
+    }
+
+    private void OnFrameworkUpdate(IFramework framework)
+    {
+        if (!Svc.ClientState.IsLoggedIn)
+        {
+            ClickSelectOkIfOpen();
+        }
+    }
+
+    private unsafe void ClickSelectOkIfOpen()
+    {
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("SelectOk", out var addon) && GenericHelpers.IsAddonReady(addon))
+        {
+            new AddonMaster.SelectOk(addon).Ok();
+            Log.Info("[FateFrenzy] Clicked OK on disconnect/error dialog.");
+        }
+    }
 }

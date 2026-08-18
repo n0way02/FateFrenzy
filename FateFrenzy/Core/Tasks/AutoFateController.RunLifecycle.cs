@@ -12,6 +12,9 @@ internal sealed partial class AutoFateController
     // Terminal choke point so every end-run path records and returns to Idle.
     private void EndRun(AutoFateSession? s)
     {
+        Plugin.Cfg.WasRunningBeforeDisconnect = false;
+        Plugin.Cfg.Save();
+
         StopTelemetry();
 
         if (ExternalPlugins.IsInstalled(ExternalPlugin.TextAdvance) && TextAdvanceIPC.IsPluginEnabled())
