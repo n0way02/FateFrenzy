@@ -29,10 +29,7 @@ public sealed class AboutWindow : Window, IDisposable
     private static readonly (FontAwesomeIcon Icon, string Label, string Url, int AccentId)[] Links =
     {
         (FontAwesomeIcon.CodeBranch, "GitHub", RepoUrl, 0),
-        (FontAwesomeIcon.Comments, "Discussions", DiscussionsUrl, 1),
         (FontAwesomeIcon.Bug, "Report a bug", IssuesUrl, 2),
-        (FontAwesomeIcon.ThLarge, "More plugins", HubUrl, 3),
-        (FontAwesomeIcon.ShieldAlt, "Security", SecurityUrl, 4),
     };
 
     private static readonly Vector2[] BloomOffsets =
