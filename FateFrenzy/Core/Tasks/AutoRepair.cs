@@ -1,6 +1,7 @@
 using FateFrenzy.Core.Game.Ops;
 using clib.TaskSystem;
 using Dalamud.Game.ClientState.Conditions;
+using ECommons.Automation;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using System.Threading.Tasks;
@@ -68,16 +69,12 @@ public sealed class AutoRepair : AutoCommon
             await RunCancellable(new MoveOp(o => o.DismountNow()), DismountWatchdogMs, "repair-dismount");
 
         Status = "Opening Repair";
-        Diag("Triggering Repair general action");
-        if (!RepairOps.TriggerRepairGeneralAction())
-        {
-            Diag("UseAction(GeneralAction, Repair) call returned without dispatching.");
-            return false;
-        }
+        Diag("Triggering /repair command");
+        Chat.ExecuteCommand("/repair");
 
         if (!await WaitUntilTimed(RepairOps.RepairAddonOpen, RepairAddonWaitMs, "self-wait-repair-addon"))
         {
-            Diag("Repair addon never opened after Repair general action.");
+            Diag("Repair addon never opened after /repair command.");
             return false;
         }
 
@@ -120,28 +117,42 @@ public sealed class AutoRepair : AutoCommon
         Status = $"Talking to {m.Name}";
         Diag($"Interacting with {m.Name}");
         var interact = new MoveOp(o => o.Interact(npc!,
-            waitUntil: () => RepairOps.RepairAddonOpen() || RepairOps.SelectIconStringOpen(),
+            waitUntil: () => RepairOps.RepairAddonOpen() || RepairOps.SelectIconStringOpen() || RepairOps.SelectStringOpen(),
             skip: UiSkipOptions.Talk));
         await RunCancellable(interact, InteractWaitMs, "repair-interact");
         ErrorIf(interact.Fault is not null, $"Interacting with {m.Name} failed: {interact.Fault?.Message}");
 
         // GC menders open the Repair window directly; other repair NPCs first present a talk menu
-        // (SelectIconString) whose repair entry we pick before the window appears.
+        // (SelectIconString or SelectString) whose repair entry we pick before the window appears.
         ErrorIf(!await WaitUntilTimed(
-                () => RepairOps.RepairAddonOpen() || RepairOps.SelectIconStringOpen(),
+                () => RepairOps.RepairAddonOpen() || RepairOps.SelectIconStringOpen() || RepairOps.SelectStringOpen(),
                 RepairAddonWaitMs, "npc-wait-menu-or-repair"),
             $"{m.Name} did not respond with a repair menu within {RepairAddonWaitMs / 1000}s.");
 
-        if (!RepairOps.RepairAddonOpen() && RepairOps.SelectIconStringOpen())
+        if (!RepairOps.RepairAddonOpen())
         {
-            var detected = RepairOps.FindRepairMenuEntry();
-            var index = detected >= 0 ? detected : repairIndex;
-            Diag($"Talk menu open; selecting repair entry {index} (auto-detected: {detected >= 0}).");
-            ErrorIf(!RepairOps.ClickSelectIconString(index),
-                $"Could not select repair option {index} in {m.Name}'s menu.");
+            if (RepairOps.SelectIconStringOpen())
+            {
+                var detected = RepairOps.FindRepairMenuEntry();
+                var index = detected >= 0 ? detected : repairIndex;
+                Diag($"SelectIconString open; selecting repair entry {index} (auto-detected: {detected >= 0}).");
+                ErrorIf(!RepairOps.ClickSelectIconString(index),
+                    $"Could not select repair option {index} in {m.Name}'s menu.");
 
-            ErrorIf(!await WaitUntilTimed(RepairOps.RepairAddonOpen, RepairAddonWaitMs, "npc-wait-repair-after-menu"),
-                $"{m.Name} did not open the Repair window after menu selection.");
+                ErrorIf(!await WaitUntilTimed(RepairOps.RepairAddonOpen, RepairAddonWaitMs, "npc-wait-repair-after-menu"),
+                    $"{m.Name} did not open the Repair window after menu selection.");
+            }
+            else if (RepairOps.SelectStringOpen())
+            {
+                var detected = RepairOps.FindRepairMenuEntry();
+                var index = detected >= 0 ? detected : repairIndex;
+                Diag($"SelectString open; selecting repair entry {index} (auto-detected: {detected >= 0}).");
+                ErrorIf(!RepairOps.ClickSelectString(index),
+                    $"Could not select repair option {index} in {m.Name}'s menu.");
+
+                ErrorIf(!await WaitUntilTimed(RepairOps.RepairAddonOpen, RepairAddonWaitMs, "npc-wait-repair-after-menu"),
+                    $"{m.Name} did not open the Repair window after menu selection.");
+            }
         }
 
         await DriveRepairAddon();

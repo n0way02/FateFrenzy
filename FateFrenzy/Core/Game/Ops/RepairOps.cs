@@ -105,6 +105,10 @@ internal static unsafe class RepairOps
         => GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectIconString, out var addon)
         && GenericHelpers.IsAddonReady(addon);
 
+    public static bool SelectStringOpen()
+        => GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectString, out var addon)
+        && GenericHelpers.IsAddonReady(addon);
+
     public static bool ClickRepairAll()
     {
         if (!EzThrottler.Throttle(AfgConstants.ThrottleKeys.RepairAll, AfgConstants.AddonInteractThrottleMs)) return false;
@@ -134,19 +138,42 @@ internal static unsafe class RepairOps
         return true;
     }
 
+    public static bool ClickSelectString(int index)
+    {
+        if (!EzThrottler.Throttle(AfgConstants.ThrottleKeys.RepairIconString, AfgConstants.AddonInteractThrottleMs)) return false;
+        if (!GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectString, out var addon)) return false;
+        if (!GenericHelpers.IsAddonReady(addon)) return false;
+        var entries = new AddonMaster.SelectString(addon).Entries;
+        if (index < 0 || index >= entries.Length) return false;
+        entries[index].Select();
+        return true;
+    }
+
     // Index of the talk-menu entry whose label looks like a repair option, or -1 if none/closed.
     // Lets custom repair NPCs work without a hand-tuned index on English clients.
     public static int FindRepairMenuEntry()
     {
-        if (!GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectIconString, out var addon)) return -1;
-        if (!GenericHelpers.IsAddonReady(addon)) return -1;
-        var entries = new AddonMaster.SelectIconString(addon).Entries;
-        for (var i = 0; i < entries.Length; i++)
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectIconString, out var addonIcon) && GenericHelpers.IsAddonReady(addonIcon))
         {
-            var text = entries[i].Text;
-            if (!string.IsNullOrEmpty(text)
-                && text.Contains(RepairMenuKeyword, System.StringComparison.OrdinalIgnoreCase))
-                return i;
+            var entries = new AddonMaster.SelectIconString(addonIcon).Entries;
+            for (var i = 0; i < entries.Length; i++)
+            {
+                var text = entries[i].Text;
+                if (!string.IsNullOrEmpty(text)
+                    && text.Contains(RepairMenuKeyword, System.StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+        }
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectString, out var addonStr) && GenericHelpers.IsAddonReady(addonStr))
+        {
+            var entries = new AddonMaster.SelectString(addonStr).Entries;
+            for (var i = 0; i < entries.Length; i++)
+            {
+                var text = entries[i].Text;
+                if (!string.IsNullOrEmpty(text)
+                    && text.Contains(RepairMenuKeyword, System.StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
         }
         return -1;
     }
