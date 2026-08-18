@@ -1,0 +1,19 @@
+South Horn ID: 1252
+
+Aetherytes:
+Expedition Base Camp - Coordenada: Vector3(830.75, 72.98, -695.98)
+The Wanderer's Heaven - Coordenada: Vector3(-173.02, 8.19, -611.14)
+Crystalized Caverns - Coordenada: Vector3(-358.14, 101.98, -120.96)
+Eldergrowth - Coordenada: Vector3(306.94, 105.18, 305.65)
+Stonemarsh - Coordenada: Vector3(-384.12, 99.20, 281.42)
+
+North Horn ID: 1346
+
+Aetherytes:
+North Horn Base Camp - Coordenada: Vector3(880.00, 259.74, 880.06)
+The Crown Of Karnat - Coordenada: Vector3(451.68, 70.93, 528.84)
+Sinking Sanctuary - Coordenada: Vector3(357.67, 45.77, -554.31)
+Suspended Masonry - Coordenada: Vector3(-547.25, 68.00, 594.40)
+Moldering Outskirts - Coordenada: Vector3(-388.57, 41.22, -440.52)
+Unhallowed Hamlet - Coordenada: Vector3(-13.36, 3.14, -40.51)
+

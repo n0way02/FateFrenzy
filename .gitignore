@@ -1,0 +1,15 @@
+# Visual Studio temporary files and build output
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+*.sln.docstates
+
+# Rider / IntelliJ files
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db

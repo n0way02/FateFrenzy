@@ -1,0 +1,23 @@
+using FateFrenzy.Core.Zones;
+
+namespace FateFrenzy.Core.Modes;
+
+public readonly struct ModeContext
+{
+    public int CompletedCount { get; init; }
+    public IReadOnlyList<ZoneInfo> Zones { get; init; }
+    public TimeSpan Elapsed { get; init; }
+}
+
+public interface IFateGrindMode
+{
+    // Stable serialization key — never change once shipped (persisted in config as ModeId).
+    string Id { get; }
+
+    string DisplayName { get; }
+    string Description { get; }
+
+    bool IsComplete(ModeContext ctx);
+
+    string? GetRemainingDisplay(ModeContext ctx) => null;
+}
