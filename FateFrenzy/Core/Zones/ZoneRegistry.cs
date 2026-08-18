@@ -27,8 +27,7 @@ public static class ZoneRegistry
             var name = t.PlaceName.ValueNullable?.Name.ExtractText() ?? "";
             if (string.IsNullOrWhiteSpace(name)) continue;
 
-            if (name.Equals("The North Horn", StringComparison.OrdinalIgnoreCase) ||
-                name.Equals("The South Horn", StringComparison.OrdinalIgnoreCase))
+            if (name.Contains("Horn", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
