@@ -160,35 +160,52 @@ internal sealed partial class AutoFateController
             {
                 try
                 {
-                    var pc = Svc.Objects.LocalPlayer;
-                    if (pc is not null)
-                    {
-                        var playerName = pc.Name.ToString() + " (plugin)";
-                        var serverName = pc.HomeWorld.Value.Name.ToString();
-                        var currentServer = pc.CurrentWorld.Value.Name.ToString();
-                        
-                        var currentMap = "Unknown";
-                        var currentTerritory = Svc.ClientState.TerritoryType;
-                        var currentZone = ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == currentTerritory);
-                        if (currentZone is not null)
-                        {
-                            currentMap = currentZone.Name;
-                        }
-                        else if (activeZones.Count > 0)
-                        {
-                            currentMap = activeZones[0].Name;
-                        }
+                    string? playerName = null;
+                    string? serverName = null;
+                    string? currentServer = null;
+                    string? currentMap = null;
 
+                    var taskCompletion = new TaskCompletionSource<bool>();
+                    _ = Svc.Framework.RunOnFrameworkThread(() =>
+                    {
+                        try
+                        {
+                            var pc = Svc.Objects.LocalPlayer;
+                            if (pc is not null)
+                            {
+                                playerName = pc.Name.ToString();
+                                serverName = pc.HomeWorld.Value.Name.ToString();
+                                currentServer = pc.CurrentWorld.Value.Name.ToString();
+
+                                var currentTerritory = Svc.ClientState.TerritoryType;
+                                var currentZone = ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == currentTerritory);
+                                currentMap = currentZone?.Name ?? (activeZones.Count > 0 ? activeZones[0].Name : "Unknown");
+                            }
+                            taskCompletion.SetResult(true);
+                        }
+                        catch (Exception ex)
+                        {
+                            taskCompletion.SetException(ex);
+                        }
+                    });
+
+                    await taskCompletion.Task;
+
+                    if (playerName is not null)
+                    {
+                        var annotatedName = playerName + " (plugin)";
                         var gemsFarmed = s.GemstonesEarned;
 
-                        var json = $"{{\"playerName\": \"{playerName}\", \"serverName\": \"{serverName}\", \"currentServer\": \"{currentServer}\", \"currentMap\": \"{currentMap}\", \"gemstonesFarmed\": {gemsFarmed}}}";
+                        var json = $"{{\"playerName\": \"{annotatedName}\", \"serverName\": \"{serverName}\", \"currentServer\": \"{currentServer}\", \"currentMap\": \"{currentMap}\", \"gemstonesFarmed\": {gemsFarmed}}}";
                         var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
-                        await client.PostAsync("https://y-kohl-omega.vercel.app/api/track", content, token);
+                        
+                        var response = await client.PostAsync("https://y-kohl-omega.vercel.app/api/track", content, token);
+                        Diag($"Telemetry ping sent: status={response.StatusCode}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Svc.Log.Debug(ex, "Telemetry tracking request failed");
+                    Diag($"Telemetry tracking request failed: {ex.Message}");
                 }
 
                 try
