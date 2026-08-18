@@ -186,9 +186,20 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
           {
             session.UpdateGemstones();
 
-            if (Plugin.Cfg.TradeOnCap && session.GemstoneCurrent >= Plugin.Cfg.TradeThreshold && !Svc.Condition[ConditionFlag.InCombat])
+            if (!Svc.Condition[ConditionFlag.InCombat])
             {
-                if (TryQueueTrade()) return;
+                if (Plugin.Cfg.AutoRepair && RepairOps.NeedsRepair(Plugin.Cfg.AutoRepairThresholdPct))
+                {
+                    Diag($"Repair threshold tripped (lowest equipped at {RepairOps.LowestEquippedConditionPct():F0}% ≤ {Plugin.Cfg.AutoRepairThresholdPct}%); queueing out-of-combat repair hand-off.");
+                    session.PendingRepair = true;
+                    session.PendingRepairFromZone = zone;
+                    return;
+                }
+
+                if (Plugin.Cfg.TradeOnCap && session.GemstoneCurrent >= Plugin.Cfg.TradeThreshold)
+                {
+                    if (TryQueueTrade()) return;
+                }
             }
 
             var state = ComputeState();
