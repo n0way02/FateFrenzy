@@ -211,7 +211,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (!Svc.ClientState.IsLoggedIn)
         {
-            if (Controller.Phase != AutoPhase.Idle)
+            if (Controller.SessionSnapshot is not null)
             {
                 if (!Configuration.WasRunningBeforeDisconnect)
                 {

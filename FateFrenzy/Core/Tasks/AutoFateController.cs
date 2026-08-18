@@ -153,6 +153,8 @@ internal sealed partial class AutoFateController
     {
         currentTask = null;
         grindTask = null;
+        session = null;
+        activeZones = [];
         Phase = AutoPhase.Idle;
     }
 
