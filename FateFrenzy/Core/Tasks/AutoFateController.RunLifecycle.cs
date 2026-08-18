@@ -12,8 +12,11 @@ internal sealed partial class AutoFateController
     // Terminal choke point so every end-run path records and returns to Idle.
     private void EndRun(AutoFateSession? s)
     {
-        Plugin.Cfg.WasRunningBeforeDisconnect = false;
-        Plugin.Cfg.Save();
+        if (ECommons.DalamudServices.Svc.ClientState.IsLoggedIn)
+        {
+            Plugin.Cfg.WasRunningBeforeDisconnect = false;
+            Plugin.Cfg.Save();
+        }
 
         StopTelemetry();
 
