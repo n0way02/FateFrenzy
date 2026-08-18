@@ -134,13 +134,7 @@ internal static class GeneralSettings
 
     private static void DrawMultiZoneGroup(Configuration cfg)
     {
-        using var group = SettingsGroup.Begin("Multi-Zone & World Rotation");
-
-        SettingsRow.Draw("Multi-Zone Farming",
-            "Enable expansion-wide multi-zone farming. FateFrenzy will detect your current expansion and automatically cycle through all zones in that expansion.",
-            SettingsControls.ToggleWidth,
-            () => SettingsControls.DrawToggle(cfg, () => cfg.EnableMultiZone, v => cfg.EnableMultiZone = v, "##gen_multizone"),
-            SettingsRow.ToggleHeight);
+        using var group = SettingsGroup.Begin("Zone & World Rotation");
 
         SettingsRow.Draw("Change instances",
             "Cycle instances (Instance 1, 2, 3, etc.) in the zone if no FATEs are found, before swapping zones.",
@@ -160,7 +154,7 @@ internal static class GeneralSettings
         }
 
         SettingsRow.Draw("World Rotation",
-            "When cycling through all zones in the expansion, automatically hop to the next world in the rotation list when returning to the first zone.",
+            "When cycling through all selected zones, automatically hop to the next world in the rotation list when returning to the first zone.",
             SettingsControls.ToggleWidth,
             () => SettingsControls.DrawToggle(cfg, () => cfg.EnableWorldRotation, v => cfg.EnableWorldRotation = v, "##gen_worldrot"),
             SettingsRow.ToggleHeight);
@@ -181,20 +175,6 @@ internal static class GeneralSettings
                     }
                 });
         }
-
-        SettingsRow.Draw("Blacklisted zones",
-            "Comma-separated list of zone names to exclude from multi-zone cycle (e.g. South Horn, North Horn).",
-            SettingsControls.RowComboWidth,
-            () =>
-            {
-                var str = cfg.BlacklistedZones;
-                ImGui.SetNextItemWidth(SettingsControls.RowComboWidth * Dalamud.Interface.Utility.ImGuiHelpers.GlobalScale);
-                if (ImGui.InputText("##gen_blacklistedzones", ref str, 512))
-                {
-                    cfg.BlacklistedZones = str;
-                    cfg.SaveDebounced();
-                }
-            });
     }
 
     private static void DrawChocoboGroup(Configuration cfg)

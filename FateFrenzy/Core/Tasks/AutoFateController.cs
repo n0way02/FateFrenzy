@@ -43,26 +43,7 @@ internal sealed partial class AutoFateController
 
     public void RunAll(IEnumerable<ZoneInfo> zones)
     {
-        var finalZones = zones.ToList();
-        if (Plugin.Cfg.EnableMultiZone)
-        {
-            var currentTerritory = Svc.ClientState.TerritoryType;
-            var currentZone = ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == currentTerritory);
-            if (currentZone is not null)
-            {
-                var expansion = currentZone.Expansion;
-                var expZones = ZoneRegistry.ByExpansion(expansion);
-                var blacklist = new System.Collections.Generic.HashSet<string>(
-                    Plugin.Cfg.BlacklistedZones.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        .Select(s => s.Trim().ToLowerInvariant())
-                );
-                finalZones = expZones
-                    .Where(z => !blacklist.Contains(z.Name.ToLowerInvariant()))
-                    .ToList();
-            }
-        }
-
-        activeZones = finalZones;
+        activeZones = zones.ToList();
         if (activeZones.Count == 0)
         {
             Diag("Start aborted: no zones selected.");

@@ -430,7 +430,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         }
         else
         {
-            var canSwap = (Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1) || Plugin.Cfg.EnableMultiZone || Plugin.Cfg.EnableWorldRotation;
+            var canSwap = (Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1) || Plugin.Cfg.EnableWorldRotation;
             if (canSwap && Environment.TickCount64 - zoneIdleSinceMs >= IdleWaitBeforeSwapMs)
                 return GrindState.SwapZone;
         }
@@ -594,7 +594,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     private async Task TickIdleScan()
     {
         await EnsureConsumables();
-        var swapPending = (Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1) || Plugin.Cfg.EnableMultiZone || Plugin.Cfg.EnableWorldRotation;
+        var swapPending = (Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1) || Plugin.Cfg.EnableWorldRotation;
         var remainingSec = Math.Max(0L, IdleWaitBeforeSwapMs - (Environment.TickCount64 - zoneIdleSinceMs)) / 1000;
         Status = swapPending
             ? $"Waiting for FATEs in {zone.Name} (swapping in {remainingSec}s)"
