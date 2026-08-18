@@ -46,6 +46,7 @@ public sealed class Plugin : IDalamudPlugin
     internal LiveFateWindow LiveFateWindow { get; }
 
     private readonly EventHandler<UnobservedTaskExceptionEventArgs> unobservedTaskHandler;
+    private bool wasLoggedInLastFrame = false;
 
     public Plugin()
     {
@@ -92,13 +93,8 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
 
-        Svc.ClientState.Login += OnLogin;
+        wasLoggedInLastFrame = Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null;
         Svc.Framework.Update += OnFrameworkUpdate;
-
-        if (Svc.ClientState.IsLoggedIn)
-        {
-            OnLogin();
-        }
     }
 
     // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
@@ -121,7 +117,6 @@ public sealed class Plugin : IDalamudPlugin
 
         TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
 
-        Svc.ClientState.Login -= OnLogin;
         Svc.Framework.Update -= OnFrameworkUpdate;
 
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
@@ -172,48 +167,56 @@ public sealed class Plugin : IDalamudPlugin
     public void ToggleDependenciesUi() => dependenciesWindow.Toggle();
     public void ToggleHistoryUi() => runHistoryWindow.Toggle();
 
-    private void OnLogin()
+    private void OnPlayerLoggedIn()
     {
         if (Configuration.AutoResumeAfterDisconnect)
         {
             Task.Run(async () =>
             {
-                Log.Info("[FateFrenzy] Login detected. Waiting for player character to load...");
-                for (int i = 0; i < 30; i++)
-                {
-                    await Task.Delay(1000);
-                    if (Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null)
-                    {
-                        // Give it one more second to make sure UI and zones are ready
-                        await Task.Delay(1000);
+                Log.Info("[FateFrenzy] Login transition detected. Waiting for player character to stabilize...");
+                // Give it one more second to make sure UI and zones are fully loaded
+                await Task.Delay(1000);
 
-                        _ = Svc.Framework.RunOnFrameworkThread(() =>
-                        {
-                            var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
-                            if (zonesToRun.Count > 0)
-                            {
-                                Log.Info("[FateFrenzy] Auto-starting after login...");
-                                Controller.RunAll(zonesToRun);
-                            }
-                        });
-                        return;
+                _ = Svc.Framework.RunOnFrameworkThread(() =>
+                {
+                    var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
+                    if (zonesToRun.Count > 0)
+                    {
+                        Log.Info("[FateFrenzy] Auto-starting after login...");
+                        Controller.RunAll(zonesToRun);
                     }
-                }
-                Log.Warning("[FateFrenzy] Player character failed to load within 30 seconds. Auto-start aborted.");
+                });
             });
+        }
+    }
+
+    private void OnPlayerLoggedOut()
+    {
+        if (Controller.SessionSnapshot is not null)
+        {
+            Log.Warning("[FateFrenzy] Player logged out while session was active! Aborting tasks.");
+            clib.Services.Svc.Automation.Stop();
+            Controller.AbortOnDisconnect();
         }
     }
 
     private void OnFrameworkUpdate(IFramework framework)
     {
-        if (!Svc.ClientState.IsLoggedIn)
-        {
-            if (Controller.SessionSnapshot is not null)
-            {
-                clib.Services.Svc.Automation.Stop();
-                Controller.AbortOnDisconnect();
-            }
+        var isLoggedIn = Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null;
 
+        if (isLoggedIn && !wasLoggedInLastFrame)
+        {
+            OnPlayerLoggedIn();
+        }
+        else if (!isLoggedIn && wasLoggedInLastFrame)
+        {
+            OnPlayerLoggedOut();
+        }
+
+        wasLoggedInLastFrame = isLoggedIn;
+
+        if (!isLoggedIn)
+        {
             ClickSelectOkIfOpen();
         }
     }
