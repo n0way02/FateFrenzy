@@ -9,13 +9,16 @@ using clib.Extensions;
 using clib.TaskSystem;
 using clib.Utils;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects.Types;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using System;
 using System.Numerics;
 using System.Threading.Tasks;
 using CSFateManager = FFXIVClientStructs.FFXIV.Client.Game.Fate.FateManager;
+using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
 namespace FateFrenzy.Core.Tasks;
 
@@ -273,26 +276,40 @@ public sealed partial class AutoFate
         if (Svc.Condition[ConditionFlag.Mounted]) return false;
         if (StuckDetector.IsPositionFrozenLegit()) return false;
         if (Svc.Objects.LocalPlayer is not { } player) return false;
+        if (player.IsCasting) return false;
 
-        if (!FateMobScanner.TryFindNearestMob(fateId, player.Position, out var mobPos, out var mobDistance))
+        Vector3 targetPos;
+        float targetDistance;
+
+        if (Svc.Targets.Target is IBattleNpc targetNpc && IsValidFateTarget(targetNpc, fateId, fate.Position, fate.Radius))
+        {
+            targetPos = targetNpc.Position;
+            targetDistance = Vector3.Distance(player.Position, targetNpc.Position);
+        }
+        else if (FateMobScanner.TryFindNearestMob(fateId, player.Position, out var mobPos, out var mobDistance))
+        {
+            targetPos = mobPos;
+            targetDistance = mobDistance;
+        }
+        else
         {
             reach.Restart();
             return false;
         }
 
-        if (!reach.Stalled(mobDistance)) return false;
+        if (!reach.Stalled(targetDistance)) return false;
 
         var fateName = fate.Name;
 
         if (reach.Repositions >= MaxEngageRepositions)
         {
-            Diag($"FATE {fateId} ({fateName}) unreachable: still {mobDistance:F0}m from the nearest mob after {MaxEngageRepositions} repositions; abandoning and blacklisting for this session");
+            Diag($"FATE {fateId} ({fateName}) unreachable: still {targetDistance:F0}m from target after {MaxEngageRepositions} repositions; abandoning and blacklisting for this session");
             abandonedFateId = fateId;
             sessionStuckFateIds.Add(fateId);
             return true;
         }
 
-        await RepositionToFateMob(fateId, fateName, mobPos, mobDistance, reach);
+        await RepositionToFateMob(fateId, fateName, targetPos, targetDistance, reach);
         reach.Restart();
         Status = $"Engaging {fateName}";
         return false;
@@ -302,7 +319,7 @@ public sealed partial class AutoFate
     {
         reach.CountReposition();
         Status = $"Closing on {fateName}";
-        Diag($"Engagement stalled on FATE {fateId} ({fateName}): nearest mob {mobDistance:F0}m away (reach {reach.Meters:F0}m) with no approach in {EngageReachStallMs / 1000}s; re-pathing with vnav (attempt {reach.Repositions}/{MaxEngageRepositions})");
+        Diag($"Engagement stalled on FATE {fateId} ({fateName}): nearest target {mobDistance:F0}m away (reach {reach.Meters:F0}m) with no approach in {EngageReachStallMs / 1000.0:F1}s; re-pathing with vnav (attempt {reach.Repositions}/{MaxEngageRepositions})");
 
         var dest = mobPos.OnMesh();
         var tolerance = reach.Meters <= EngageMeleeReachMeters
@@ -313,8 +330,15 @@ public sealed partial class AutoFate
 
         bool InRangeOrGone()
         {
-            if (PublicEvent.GetFateById(fateId) is not { State: FateState.Running }) return true;
+            var activeFate = PublicEvent.GetFateById(fateId);
+            if (activeFate is not { State: FateState.Running }) return true;
             if (Svc.Objects.LocalPlayer is not { } moving) return true;
+
+            if (Svc.Targets.Target is IBattleNpc targetNpc && IsValidFateTarget(targetNpc, fateId, activeFate.Position, activeFate.Radius))
+            {
+                return Vector3.Distance(moving.Position, targetNpc.Position) <= reachMeters;
+            }
+
             return FateMobScanner.TryFindNearestMob(fateId, moving.Position, out _, out var live)
                 && live <= reachMeters;
         }
@@ -326,6 +350,29 @@ public sealed partial class AutoFate
 
         if (op.Fault is { } fault)
             Diag($"Reposition for FATE {fateId} faulted: {fault.Message}");
+    }
+
+    private static unsafe bool IsValidFateTarget(IBattleNpc targetNpc, uint fateId, Vector3 fatePos, float fateRadius)
+    {
+        if (!targetNpc.IsTargetable || targetNpc.CurrentHp == 0) return false;
+
+        var name = targetNpc.Name.ToString();
+        if (name.Equals("Forlorn Maiden", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("The Forlorn", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var native = (CSGameObject*)targetNpc.Address;
+        if (native->FateId == fateId) return true;
+
+        if (native->BattleNpcSubKind == BattleNpcSubKind.Combatant &&
+            Vector3.Distance(targetNpc.Position, fatePos) <= fateRadius + 10f)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private sealed class EngageReachTracker(float reachMeters)
