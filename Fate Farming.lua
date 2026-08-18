@@ -4141,6 +4141,7 @@ end)
 Dalamud.Log("[FATE Tracker] Script carregado e variáveis iniciais definidas!")
 SessionGemstonesFarmed = 0
 LastFrameGemstoneCount = Inventory.GetItemCount(26807)
+LastGcTime = 0
 yield("/echo [FATE] --------------------------------------------------")
 yield("/echo [FATE] >>> FATE FRENZY PLUGIN IS OUT! <<<")
 yield("/echo [FATE] Check out the native, crash-free C# plugin counterpart:")
