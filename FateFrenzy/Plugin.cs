@@ -200,6 +200,13 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (!Svc.ClientState.IsLoggedIn)
         {
+            if (clib.Services.Svc.Automation.Running)
+            {
+                Log.Warning("[FateFrenzy] Player logged out while automation was active! Aborting tasks to prevent crash.");
+                clib.Services.Svc.Automation.Stop();
+                Controller.AbortOnDisconnect();
+            }
+
             ClickSelectOkIfOpen();
         }
     }

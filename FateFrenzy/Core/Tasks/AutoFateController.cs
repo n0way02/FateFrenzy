@@ -149,6 +149,12 @@ internal sealed partial class AutoFateController
         if (ending is not null) Diag("Stop requested; session cleared.");
     }
 
+    public void AbortOnDisconnect()
+    {
+        currentTask = null;
+        grindTask = null;
+    }
+
     private System.Threading.CancellationTokenSource? telemetryCts;
 
     private void StartTelemetry(AutoFateSession s)
