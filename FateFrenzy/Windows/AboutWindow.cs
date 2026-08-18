@@ -41,59 +41,39 @@ public sealed class AboutWindow : Window, IDisposable
     {
         new(FontAwesomeIcon.Heart, "A little reminder", Styling.AccentRose, new[]
         {
-            "Been at it a while? Roll your shoulders and take one slow breath.",
-            "Hydration check. When did you last drink some water?",
-            "Blink a few times and let your eyes rest for a moment.",
-            "Stand up, stretch, and shake out your hands. Future you says thanks.",
-            "Sit up and settle in comfortably. Your back will thank you later.",
-            "Remember to eat something today. You matter more than any score.",
-            "Eyes feel tired? Look at something far away for twenty seconds.",
-            "Whatever you're chasing, you're allowed to take a break whenever.",
-            "You're doing great. Be a little kinder to yourself today.",
-            "A glass of water and a quick stretch can reset a long session.",
-            "Unclench your jaw and drop your shoulders. There you go.",
-            "Rest is part of the journey too. Step away whenever you need to.",
+            "Rest your eyes for a bit. Look at something far away for 20 seconds.",
+            "Water check! Have you taken a sip recently? Keep yourself hydrated.",
+            "Stand up and do a quick stretch. Your legs and back will thank you.",
+            "Take a deep breath, unclench your jaw, and drop your shoulders.",
+            "Remember that grinding is fun, but real life comes first. Enjoy your day!",
+            "Double-check your posture. Sitting up straight makes a big difference.",
         }),
         new(FontAwesomeIcon.Lightbulb, "Did you know?", Styling.AccentAmberSoft, new[]
         {
-            "Honey never spoils. Jars over 3,000 years old have been found still edible.",
-            "Octopuses have three hearts and blue blood.",
-            "A day on Venus is longer than a whole year on Venus.",
-            "Bananas are berries, but strawberries aren't.",
-            "There are more possible chess games than atoms in the observable universe.",
-            "Sharks have been around longer than trees have.",
-            "A group of flamingos is called a flamboyance.",
-            "Honeybees can recognize individual human faces.",
-            "Wombat droppings are cube shaped.",
-            "The Eiffel Tower can grow over 15 cm taller on a hot day.",
-            "Hot water can sometimes freeze faster than cold water.",
-            "A bolt of lightning is roughly five times hotter than the surface of the Sun.",
+            "Bananas grow curved towards the sun because of a process called negative geotropism.",
+            "Wombat droppings are cube-shaped, which keeps them from rolling off rocks.",
+            "The first computer bug was an actual moth found trapped inside a system relay in 1947.",
+            "Clouds may look light and fluffy, but a typical cumulus cloud weighs about 1.1 million pounds.",
+            "Cows have best friends and experience high levels of stress when separated from them.",
+            "A day on Venus lasts longer than a whole Venusian year.",
         }),
         new(FontAwesomeIcon.Star, "Words to live by", Styling.AccentMintSoft, new[]
         {
-            "Done is better than perfect. You can always polish later.",
-            "Small steps every day add up to surprising distances.",
-            "Comparison is the thief of joy. Run your own race.",
-            "Progress, not perfection.",
-            "You don't have to be great to start, but you have to start to be great.",
-            "Be patient with yourself. Growth takes time.",
-            "The best time to begin was yesterday. The second best is right now.",
-            "Celebrate the small wins. They count too.",
-            "Slow progress is still progress.",
-            "Your only real competition is who you were yesterday.",
+            "Progress is progress, no matter how small. Every step forward counts.",
+            "Comparison is the thief of joy. Run your own race at your own pace.",
+            "Done is better than perfect. You can always polish and improve it later.",
+            "Be patient and kind to yourself. Meaningful growth takes time.",
+            "The best time to start was yesterday. The second best time is right now.",
+            "Celebrate the small wins along the way. They build the foundation for big ones.",
         }),
         new(FontAwesomeIcon.GrinBeam, "Just for fun", Styling.AccentBlueSoft, new[]
         {
-            "Why don't scientists trust atoms? Because they make up everything.",
-            "I would tell you a chemistry joke, but I know I wouldn't get a reaction.",
-            "Why did the scarecrow win an award? He was outstanding in his field.",
-            "I'm reading a book about anti-gravity. It's impossible to put down.",
-            "Why don't skeletons fight each other? They don't have the guts.",
-            "What do you call fake spaghetti? An impasta.",
-            "Why did the bicycle fall over? It was two tired.",
+            "Why did the scarecrow win an award? Because he was outstanding in his field.",
+            "Why don't skeletons fight each other? They just don't have the guts.",
+            "What do you call a fake noodle? An impasta.",
+            "Why did the bicycle fall over? Because it was two-tired.",
+            "How does a penguin build its house? Igloos it together.",
             "What do you call cheese that isn't yours? Nacho cheese.",
-            "I'm on a seafood diet. I see food, and I eat it.",
-            "I only know 25 letters of the alphabet. I don't know y.",
         }),
     };
 
@@ -342,8 +322,8 @@ public sealed class AboutWindow : Window, IDisposable
         var pulse = Styling.Pulse(Styling.PulseBreath);
         var accent = Styling.PulseColor(Styling.AccentPink, Styling.AccentViolet, 5200.0);
 
-        const string title = "Made with care";
-        const string body = "I build and maintain this in my spare time. If it has helped you, a sponsorship lets me keep improving it. No pressure, and thank you for being here.";
+        const string title = "Developed for the community";
+        const string body = "FateFrenzy is built and maintained to make FATE grinding smooth and accessible. If this plugin saves you time and brings you value, consider showing your support. Happy grinding!";
 
         var slotOrigin = ImGui.GetCursorScreenPos();
         var fullAvail = ImGui.GetContentRegionAvail().X;
