@@ -12,6 +12,8 @@ internal sealed partial class AutoFateController
     // Terminal choke point so every end-run path records and returns to Idle.
     private void EndRun(AutoFateSession? s)
     {
+        StopTelemetry();
+
         if (ExternalPlugins.IsInstalled(ExternalPlugin.TextAdvance) && TextAdvanceIPC.IsPluginEnabled())
         {
             Chat.ExecuteCommand("/at");

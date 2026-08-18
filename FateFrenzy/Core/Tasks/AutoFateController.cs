@@ -5,6 +5,7 @@ using FateFrenzy.Core.Zones;
 using FateFrenzy.Core.Ipc;
 using clib.Services;
 using ECommons.Automation;
+using System.Threading.Tasks;
 
 namespace FateFrenzy.Core.Tasks;
 
@@ -96,6 +97,8 @@ internal sealed partial class AutoFateController
         {
             Chat.ExecuteCommand("/at");
         }
+
+        StartTelemetry(s);
     }
 
     private static void ApplyStartingClass()
@@ -120,6 +123,8 @@ internal sealed partial class AutoFateController
 
     public void Stop()
     {
+        StopTelemetry();
+
         var ending = session;
         currentTask = null;
         grindTask = null;
@@ -136,6 +141,72 @@ internal sealed partial class AutoFateController
         activeZones = [];
         Phase = AutoPhase.Idle;
         if (ending is not null) Diag("Stop requested; session cleared.");
+    }
+
+    private System.Threading.CancellationTokenSource? telemetryCts;
+
+    private void StartTelemetry(AutoFateSession s)
+    {
+        telemetryCts?.Cancel();
+        telemetryCts = new System.Threading.CancellationTokenSource();
+        var token = telemetryCts.Token;
+
+        Task.Run(async () =>
+        {
+            var client = new System.Net.Http.HttpClient();
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    var pc = Svc.Objects.LocalPlayer;
+                    if (pc is not null)
+                    {
+                        var playerName = pc.Name.ToString() + " (plugin)";
+                        var serverName = pc.HomeWorld.Value.Name.ToString();
+                        var currentServer = pc.CurrentWorld.Value.Name.ToString();
+                        
+                        var currentMap = "Unknown";
+                        var currentTerritory = Svc.ClientState.TerritoryType;
+                        var currentZone = ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == currentTerritory);
+                        if (currentZone is not null)
+                        {
+                            currentMap = currentZone.Name;
+                        }
+                        else if (activeZones.Count > 0)
+                        {
+                            currentMap = activeZones[0].Name;
+                        }
+
+                        var gemsFarmed = s.GemstonesEarned;
+
+                        var json = $"{{\"playerName\": \"{playerName}\", \"serverName\": \"{serverName}\", \"currentServer\": \"{currentServer}\", \"currentMap\": \"{currentMap}\", \"gemstonesFarmed\": {gemsFarmed}}}";
+                        var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                        await client.PostAsync("https://y-kohl-omega.vercel.app/api/track", content, token);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Svc.Log.Debug(ex, "Telemetry tracking request failed");
+                }
+
+                try
+                {
+                    await Task.Delay(60000, token);
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
+            }
+        }, token);
+    }
+
+    private void StopTelemetry()
+    {
+        telemetryCts?.Cancel();
+        telemetryCts = null;
     }
 
 }
