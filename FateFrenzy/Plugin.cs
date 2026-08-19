@@ -264,6 +264,20 @@ public sealed class Plugin : IDalamudPlugin
                 return;
             }
 
+            // Do NOT click if this is the double login / improper logout warning dialog
+            if (text.Contains("another client") ||
+                text.Contains("outro cliente") ||
+                text.Contains("properly logged") ||
+                text.Contains("desconectado") ||
+                text.Contains("autre client") ||
+                text.Contains("anderen client") ||
+                text.Contains("anderer client") ||
+                text.Contains("別のクライアント") ||
+                text.Contains("ログアウト"))
+            {
+                return;
+            }
+
             selectOk.Ok();
             Log.Info("[FateFrenzy] Clicked OK on disconnect/error dialog.");
         }
