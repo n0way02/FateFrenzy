@@ -166,13 +166,13 @@ public sealed class Plugin : IDalamudPlugin
     public void ToggleDependenciesUi() => dependenciesWindow.Toggle();
     public void ToggleHistoryUi() => runHistoryWindow.Toggle();
 
-    private void OnPlayerLoggedIn()
+    private void TriggerAutoResume()
     {
-        if (Configuration.AutoResumeAfterDisconnect)
+        if (Configuration.AutoResumeAfterDisconnect && Configuration.WasRunningBeforeDisconnect)
         {
             Task.Run(async () =>
             {
-                Log.Info("[FateFrenzy] Login transition detected. Waiting for player character to load...");
+                Log.Info("[FateFrenzy] Auto-resume triggered. Waiting for player character to load...");
                 for (int i = 0; i < 30; i++)
                 {
                     await Task.Delay(1000);
@@ -183,17 +183,19 @@ public sealed class Plugin : IDalamudPlugin
 
                         _ = Svc.Framework.RunOnFrameworkThread(() =>
                         {
+                            if (!Svc.ClientState.IsLoggedIn || Controller.SessionSnapshot is not null) return;
+
                             var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
                             if (zonesToRun.Count > 0)
                             {
-                                Log.Info("[FateFrenzy] Auto-starting after login...");
+                                Log.Info("[FateFrenzy] Auto-starting after login/startup...");
                                 Controller.RunAll(zonesToRun);
                             }
                         });
                         return;
                     }
                 }
-                Log.Warning("[FateFrenzy] Player character failed to load within 30 seconds. Auto-start aborted.");
+                Log.Warning("[FateFrenzy] Player character failed to load within 30 seconds. Auto-resume aborted.");
             });
         }
     }
@@ -215,12 +217,16 @@ public sealed class Plugin : IDalamudPlugin
         if (wasLoggedInLastFrame is null)
         {
             wasLoggedInLastFrame = isLoggedIn;
+            if (isLoggedIn)
+            {
+                TriggerAutoResume();
+            }
             return;
         }
 
         if (isLoggedIn && !wasLoggedInLastFrame.Value)
         {
-            OnPlayerLoggedIn();
+            TriggerAutoResume();
         }
         else if (!isLoggedIn && wasLoggedInLastFrame.Value)
         {
