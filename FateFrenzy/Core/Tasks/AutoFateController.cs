@@ -21,6 +21,7 @@ internal sealed partial class AutoFateController
     };
 
     public AutoPhase Phase { get; private set; } = AutoPhase.Idle;
+    public bool WasStoppedManually { get; set; } = false;
 
     private AutoFateSession? session;
     private IReadOnlyList<ZoneInfo> activeZones = [];
@@ -43,6 +44,7 @@ internal sealed partial class AutoFateController
 
     public void RunAll(IEnumerable<ZoneInfo> zones)
     {
+        WasStoppedManually = false;
         activeZones = zones.ToList();
         if (activeZones.Count == 0)
         {
@@ -107,6 +109,7 @@ internal sealed partial class AutoFateController
 
     public void Stop()
     {
+        WasStoppedManually = true;
         Plugin.Cfg.WasRunningBeforeDisconnect = false;
         Plugin.Cfg.Save();
 
@@ -132,6 +135,7 @@ internal sealed partial class AutoFateController
 
     public void AbortOnDisconnect()
     {
+        WasStoppedManually = false;
         currentTask = null;
         grindTask = null;
         session = null;

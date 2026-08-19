@@ -95,13 +95,6 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
 
         Svc.Framework.Update += OnFrameworkUpdate;
-        Svc.ClientState.Login += OnLogin;
-        Svc.ClientState.Logout += OnLogout;
-
-        if (Svc.ClientState.IsLoggedIn)
-        {
-            TriggerAutoResume();
-        }
     }
 
     // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
@@ -125,8 +118,6 @@ public sealed class Plugin : IDalamudPlugin
         TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
 
         Svc.Framework.Update -= OnFrameworkUpdate;
-        Svc.ClientState.Login -= OnLogin;
-        Svc.ClientState.Logout -= OnLogout;
 
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
@@ -200,64 +191,51 @@ public sealed class Plugin : IDalamudPlugin
     public void ToggleDependenciesUi() => dependenciesWindow.Toggle();
     public void ToggleHistoryUi() => runHistoryWindow.Toggle();
 
-    private void OnLogin()
-    {
-        Log.Info("[FateFrenzy] Login event detected.");
-        TriggerAutoResume();
-    }
-
-    private void OnLogout(int type, int code)
-    {
-        Log.Info($"[FateFrenzy] Logout event detected (type={type}, code={code}).");
-        OnPlayerLoggedOut();
-    }
-
-    private void TriggerAutoResume()
-    {
-        if (Configuration.AutoResumeAfterDisconnect)
-        {
-            Log.Info("[FateFrenzy] Auto-resume triggered. Monitoring framework for player character load...");
-            isAutoResumePending = true;
-            loginTime = Environment.TickCount64;
-        }
-    }
-
-    private void OnPlayerLoggedOut()
-    {
-        if (Controller.SessionSnapshot is not null)
-        {
-            Log.Warning("[FateFrenzy] Player logged out while session was active! Aborting tasks.");
-            clib.Services.Svc.Automation.Stop();
-            Controller.AbortOnDisconnect();
-        }
-    }
-
     private void OnFrameworkUpdate(IFramework framework)
     {
         var isLoggedIn = Svc.ClientState.IsLoggedIn;
 
-        if (isAutoResumePending)
+        if (!isLoggedIn)
         {
-            if (isLoggedIn && Svc.Objects.LocalPlayer is not null)
+            if (Controller.SessionSnapshot is not null)
             {
-                if (Environment.TickCount64 - loginTime >= 10000)
+                Log.Warning("[FateFrenzy] Player logged out while session was active! Aborting tasks.");
+                clib.Services.Svc.Automation.Stop();
+                Controller.AbortOnDisconnect();
+            }
+            isAutoResumePending = false;
+        }
+        else // isLoggedIn is true
+        {
+            if (Svc.Objects.LocalPlayer is not null && Controller.SessionSnapshot is null && !Controller.WasStoppedManually)
+            {
+                if (!isAutoResumePending)
                 {
-                    isAutoResumePending = false;
-                    if (Controller.SessionSnapshot is null)
+                    Log.Info("[FateFrenzy] Player character loaded. Starting 10-second auto-resume timer...");
+                    isAutoResumePending = true;
+                    loginTime = Environment.TickCount64;
+                }
+                else
+                {
+                    if (Environment.TickCount64 - loginTime >= 10000)
                     {
-                        var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
-                        Log.Info($"[FateFrenzy] Auto-resume resolving selected zones. Found: {zonesToRun.Count} zone(s) selected.");
-                        if (zonesToRun.Count > 0)
+                        isAutoResumePending = false;
+                        if (Configuration.AutoResumeAfterDisconnect)
                         {
-                            Log.Info("[FateFrenzy] Auto-starting after login/startup...");
-                            Controller.RunAll(zonesToRun);
+                            var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
+                            Log.Info($"[FateFrenzy] Auto-resume resolving selected zones. Found: {zonesToRun.Count} zone(s) selected.");
+                            if (zonesToRun.Count > 0)
+                            {
+                                Log.Info("[FateFrenzy] Auto-starting after login/startup...");
+                                Controller.RunAll(zonesToRun);
+                            }
                         }
                     }
                 }
             }
-            else if (!isLoggedIn)
+            else
             {
-                loginTime = Environment.TickCount64;
+                isAutoResumePending = false;
             }
         }
     }
