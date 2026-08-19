@@ -246,7 +246,25 @@ public sealed class Plugin : IDalamudPlugin
 
         if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("SelectOk", out var addon) && GenericHelpers.IsAddonReady(addon))
         {
-            new AddonMaster.SelectOk(addon).Ok();
+            var selectOk = new AddonMaster.SelectOk(addon);
+            var text = selectOk.Text.ToLowerInvariant();
+
+            // Do NOT click if this is the login queue or server congestion dialog
+            if (text.Contains("queue") || 
+                text.Contains("congested") || 
+                text.Contains("fila") || 
+                text.Contains("congestionado") ||
+                text.Contains("attente") ||
+                text.Contains("encombré") ||
+                text.Contains("warteschlange") ||
+                text.Contains("überlastet") ||
+                text.Contains("混雑") ||
+                text.Contains("人待ち"))
+            {
+                return;
+            }
+
+            selectOk.Ok();
             Log.Info("[FateFrenzy] Clicked OK on disconnect/error dialog.");
         }
     }
