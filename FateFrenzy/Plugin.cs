@@ -46,7 +46,6 @@ public sealed class Plugin : IDalamudPlugin
     internal LiveFateWindow LiveFateWindow { get; }
 
     private readonly EventHandler<UnobservedTaskExceptionEventArgs> unobservedTaskHandler;
-    private bool? wasLoggedInLastFrame = null;
     private bool isAutoResumePending = false;
     private long loginTime = 0;
 
@@ -96,6 +95,13 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
 
         Svc.Framework.Update += OnFrameworkUpdate;
+        Svc.ClientState.Login += OnLogin;
+        Svc.ClientState.Logout += OnLogout;
+
+        if (Svc.ClientState.IsLoggedIn)
+        {
+            TriggerAutoResume();
+        }
     }
 
     // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
@@ -119,6 +125,8 @@ public sealed class Plugin : IDalamudPlugin
         TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
 
         Svc.Framework.Update -= OnFrameworkUpdate;
+        Svc.ClientState.Login -= OnLogin;
+        Svc.ClientState.Logout -= OnLogout;
 
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
@@ -168,6 +176,18 @@ public sealed class Plugin : IDalamudPlugin
     public void ToggleDependenciesUi() => dependenciesWindow.Toggle();
     public void ToggleHistoryUi() => runHistoryWindow.Toggle();
 
+    private void OnLogin()
+    {
+        Log.Info("[FateFrenzy] Login event detected.");
+        TriggerAutoResume();
+    }
+
+    private void OnLogout(int type, int code)
+    {
+        Log.Info($"[FateFrenzy] Logout event detected (type={type}, code={code}).");
+        OnPlayerLoggedOut();
+    }
+
     private void TriggerAutoResume()
     {
         if (Configuration.AutoResumeAfterDisconnect)
@@ -191,25 +211,6 @@ public sealed class Plugin : IDalamudPlugin
     private void OnFrameworkUpdate(IFramework framework)
     {
         var isLoggedIn = Svc.ClientState.IsLoggedIn;
-
-        if (wasLoggedInLastFrame is null)
-        {
-            wasLoggedInLastFrame = isLoggedIn;
-            if (isLoggedIn)
-            {
-                TriggerAutoResume();
-            }
-        }
-        else if (isLoggedIn && !wasLoggedInLastFrame.Value)
-        {
-            TriggerAutoResume();
-        }
-        else if (!isLoggedIn && wasLoggedInLastFrame.Value)
-        {
-            OnPlayerLoggedOut();
-        }
-
-        wasLoggedInLastFrame = isLoggedIn;
 
         if (isAutoResumePending)
         {
