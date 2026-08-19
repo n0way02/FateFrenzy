@@ -47,6 +47,8 @@ public sealed class Plugin : IDalamudPlugin
 
     private readonly EventHandler<UnobservedTaskExceptionEventArgs> unobservedTaskHandler;
     private bool? wasLoggedInLastFrame = null;
+    private bool isAutoResumePending = false;
+    private long loginTime = 0;
 
     public Plugin()
     {
@@ -170,33 +172,9 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (Configuration.AutoResumeAfterDisconnect)
         {
-            Task.Run(async () =>
-            {
-                Log.Info("[FateFrenzy] Auto-resume triggered. Waiting for player character to load...");
-                for (int i = 0; i < 30; i++)
-                {
-                    await Task.Delay(1000);
-                    if (Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null)
-                    {
-                        // Give it one more second to make sure UI and zones are fully loaded
-                        await Task.Delay(1000);
-
-                        _ = Svc.Framework.RunOnFrameworkThread(() =>
-                        {
-                            if (!Svc.ClientState.IsLoggedIn || Controller.SessionSnapshot is not null) return;
-
-                            var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
-                            if (zonesToRun.Count > 0)
-                            {
-                                Log.Info("[FateFrenzy] Auto-starting after login/startup...");
-                                Controller.RunAll(zonesToRun);
-                            }
-                        });
-                        return;
-                    }
-                }
-                Log.Warning("[FateFrenzy] Player character failed to load within 30 seconds. Auto-resume aborted.");
-            });
+            Log.Info("[FateFrenzy] Auto-resume triggered. Monitoring framework for player character load...");
+            isAutoResumePending = true;
+            loginTime = Environment.TickCount64;
         }
     }
 
@@ -221,10 +199,8 @@ public sealed class Plugin : IDalamudPlugin
             {
                 TriggerAutoResume();
             }
-            return;
         }
-
-        if (isLoggedIn && !wasLoggedInLastFrame.Value)
+        else if (isLoggedIn && !wasLoggedInLastFrame.Value)
         {
             TriggerAutoResume();
         }
@@ -234,6 +210,30 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         wasLoggedInLastFrame = isLoggedIn;
+
+        if (isAutoResumePending)
+        {
+            if (isLoggedIn && Svc.Objects.LocalPlayer is not null)
+            {
+                if (Environment.TickCount64 - loginTime >= 2000)
+                {
+                    isAutoResumePending = false;
+                    if (Controller.SessionSnapshot is null)
+                    {
+                        var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
+                        if (zonesToRun.Count > 0)
+                        {
+                            Log.Info("[FateFrenzy] Auto-starting after login/startup...");
+                            Controller.RunAll(zonesToRun);
+                        }
+                    }
+                }
+            }
+            else if (!isLoggedIn)
+            {
+                loginTime = Environment.TickCount64;
+            }
+        }
 
         if (!isLoggedIn)
         {
