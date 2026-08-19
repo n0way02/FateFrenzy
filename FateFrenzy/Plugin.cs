@@ -168,7 +168,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void TriggerAutoResume()
     {
-        if (Configuration.AutoResumeAfterDisconnect && Configuration.WasRunningBeforeDisconnect)
+        if (Configuration.AutoResumeAfterDisconnect)
         {
             Task.Run(async () =>
             {
