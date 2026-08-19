@@ -166,6 +166,30 @@ public sealed class Plugin : IDalamudPlugin
             Controller.TogglePause();
         else if (trimmed.Equals("target", StringComparison.OrdinalIgnoreCase))
             TargetDumper.Dump();
+        else if (trimmed.Equals("start", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = Svc.Framework.RunOnFrameworkThread(() =>
+            {
+                var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
+                if (zonesToRun.Count > 0)
+                {
+                    Log.Info("[FateFrenzy] Start command received. Running FATE grind...");
+                    Controller.RunAll(zonesToRun);
+                }
+                else
+                {
+                    ECommons.DalamudServices.Svc.Chat.PrintError("[FateFrenzy] Cannot start: no zones selected in configuration.");
+                }
+            });
+        }
+        else if (trimmed.Equals("stop", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = Svc.Framework.RunOnFrameworkThread(() =>
+            {
+                Log.Info("[FateFrenzy] Stop command received. Stopping FATE grind...");
+                Controller.Stop();
+            });
+        }
         else
             ToggleMainUi();
     }
@@ -216,7 +240,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             if (isLoggedIn && Svc.Objects.LocalPlayer is not null)
             {
-                if (Environment.TickCount64 - loginTime >= 2000)
+                if (Environment.TickCount64 - loginTime >= 10000)
                 {
                     isAutoResumePending = false;
                     if (Controller.SessionSnapshot is null)
