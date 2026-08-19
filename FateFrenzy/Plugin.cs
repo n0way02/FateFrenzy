@@ -221,6 +221,7 @@ public sealed class Plugin : IDalamudPlugin
                     if (Controller.SessionSnapshot is null)
                     {
                         var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
+                        Log.Info($"[FateFrenzy] Auto-resume resolving selected zones. Found: {zonesToRun.Count} zone(s) selected.");
                         if (zonesToRun.Count > 0)
                         {
                             Log.Info("[FateFrenzy] Auto-starting after login/startup...");

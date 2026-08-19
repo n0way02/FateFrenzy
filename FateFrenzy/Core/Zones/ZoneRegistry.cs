@@ -7,7 +7,25 @@ public static class ZoneRegistry
 {
     private static ZoneInfo[]? cached;
 
-    public static ZoneInfo[] Zones => cached ??= LoadFromLumina();
+    public static ZoneInfo[] Zones
+    {
+        get
+        {
+            if (cached == null || cached.Length == 0)
+            {
+                var loaded = LoadFromLumina();
+                if (loaded.Length > 0)
+                {
+                    cached = loaded;
+                }
+                else
+                {
+                    return [];
+                }
+            }
+            return cached;
+        }
+    }
 
     public static IEnumerable<ZoneInfo> ByExpansion(ExpansionKind exp) =>
         Zones.Where(z => z.Expansion == exp);
