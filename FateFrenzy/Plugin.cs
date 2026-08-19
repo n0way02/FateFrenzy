@@ -207,7 +207,7 @@ public sealed class Plugin : IDalamudPlugin
         }
         else // isLoggedIn is true
         {
-            if (Svc.Objects.LocalPlayer is not null && Controller.SessionSnapshot is null && !Controller.WasStoppedManually)
+            if (Configuration.AutoResumeAfterDisconnect && Svc.Objects.LocalPlayer is not null && Controller.SessionSnapshot is null && !Controller.WasStoppedManually)
             {
                 if (!isAutoResumePending)
                 {
@@ -220,15 +220,17 @@ public sealed class Plugin : IDalamudPlugin
                     if (Environment.TickCount64 - loginTime >= 10000)
                     {
                         isAutoResumePending = false;
-                        if (Configuration.AutoResumeAfterDisconnect)
+                        var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
+                        Log.Info($"[FateFrenzy] Auto-resume resolving selected zones. Found: {zonesToRun.Count} zone(s) selected.");
+                        if (zonesToRun.Count > 0)
                         {
-                            var zonesToRun = ZoneSelection.ResolveStartList(Configuration);
-                            Log.Info($"[FateFrenzy] Auto-resume resolving selected zones. Found: {zonesToRun.Count} zone(s) selected.");
-                            if (zonesToRun.Count > 0)
-                            {
-                                Log.Info("[FateFrenzy] Auto-starting after login/startup...");
-                                Controller.RunAll(zonesToRun);
-                            }
+                            Log.Info("[FateFrenzy] Auto-starting after login/startup...");
+                            Controller.RunAll(zonesToRun);
+                        }
+                        else
+                        {
+                            Log.Warning("[FateFrenzy] Auto-resume aborted: no zones selected in configuration.");
+                            Controller.WasStoppedManually = true; // prevent infinite loop
                         }
                     }
                 }

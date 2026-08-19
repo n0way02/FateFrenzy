@@ -10,7 +10,7 @@
   -->
 
   <PropertyGroup Label="Identity">
-    <Version>1.7.7.0</Version>
+    <Version>1.7.8.0</Version>
     <Authors>n0way02</Authors>
     <Copyright>Copyright (c) n0way02</Copyright>
     <PackageProjectUrl>https://github.com/n0way02/FateFrenzy</PackageProjectUrl>
