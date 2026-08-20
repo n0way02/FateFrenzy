@@ -10,6 +10,7 @@ public sealed class Configuration : IPluginConfiguration
     public int Version { get; set; }
 
     public bool AutoShowOnLogin { get; set; } = false;
+    public bool RelicModeEnabled { get; set; } = false;
 
     public List<uint> SelectedZones { get; set; } = [];
 

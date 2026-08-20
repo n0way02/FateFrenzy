@@ -130,7 +130,18 @@ internal static class ZonePicker
         ImGui.SameLine();
         var nameColor = zone.Unlocked ? Styling.TextStrong : Styling.TextMuted;
         using (ImRaii.PushColor(ImGuiCol.Text, nameColor))
-            ImGui.TextUnformatted(zone.Name);
+        {
+            if (cfg.RelicModeEnabled && RelicItemResolver.TerritoryToItemName.ContainsKey(zone.TerritoryId))
+            {
+                var count = RelicItemResolver.GetItemCount(zone.TerritoryId);
+                var displayCount = Math.Min(3, count);
+                ImGui.TextUnformatted($"{zone.Name} ({displayCount}/3)");
+            }
+            else
+            {
+                ImGui.TextUnformatted(zone.Name);
+            }
+        }
 
         if (queuePos > 0)
         {

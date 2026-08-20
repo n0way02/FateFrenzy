@@ -13,6 +13,7 @@ internal static class GeneralSettings
         DrawCombatGroup(cfg);
         DrawMultiZoneGroup(cfg);
         DrawChocoboGroup(cfg);
+        DrawRelicGroup(cfg);
     }
 
     private static void DrawWindowGroup(Configuration cfg)
@@ -226,5 +227,16 @@ internal static class GeneralSettings
                 () => SettingsControls.DrawToggle(cfg, () => cfg.BuyGysahlGreens, v => cfg.BuyGysahlGreens = v, "##gen_buygreens"),
                 SettingsRow.ToggleHeight);
         }
+    }
+
+    private static void DrawRelicGroup(Configuration cfg)
+    {
+        using var group = SettingsGroup.Begin("Dawntrail Relic Weapon");
+
+        SettingsRow.Draw("Dawntrail Relic Mode",
+            "Automatically monitors your inventory for Patch 7.25 Relic FATE items (Azurite, Verdigris, Malachite, Realgar, Caput Mortuum, and Orpiment Demiatmas). The plugin will automatically skip maps once you have collected 3 of their corresponding stones, and stop once all selected relic zones are completed.",
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.RelicModeEnabled, v => cfg.RelicModeEnabled = v, "##gen_relic"),
+            SettingsRow.ToggleHeight);
     }
 }

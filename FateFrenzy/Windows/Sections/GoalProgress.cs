@@ -12,6 +12,28 @@ internal static class GoalProgress
 
     public static Info Resolve(Configuration cfg, AutoFateSession? s)
     {
+        if (cfg.RelicModeEnabled)
+        {
+            var relicZones = cfg.SelectedZones
+                .Select(id => Core.Zones.ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == id))
+                .Where(z => z is not null && Core.Tasks.RelicItemResolver.TerritoryToItemName.ContainsKey(z.TerritoryId))
+                .ToList();
+            if (relicZones.Count > 0)
+            {
+                var target = relicZones.Count * 3;
+                var current = 0;
+                foreach (var rz in relicZones)
+                {
+                    current += Math.Min(3, Core.Tasks.RelicItemResolver.GetItemCount(rz!.TerritoryId));
+                }
+                var left = Math.Max(0, target - current);
+                return new Info(
+                    Math.Clamp(current / (float)target, 0f, 1f),
+                    current.ToString(), $"/ {target}",
+                    left > 0 ? $"{left} relic stones to go" : "all relic stones collected", false);
+            }
+        }
+
         var completed = s?.CompletedCount ?? 0;
 
         switch (cfg.ActiveMode.Id)

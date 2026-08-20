@@ -45,10 +45,22 @@ internal sealed partial class AutoFateController
     public void RunAll(IEnumerable<ZoneInfo> zones)
     {
         WasStoppedManually = false;
-        activeZones = zones.ToList();
+        var list = zones.ToList();
+
+        if (Plugin.Cfg.RelicModeEnabled)
+        {
+            var incomplete = list.Where(z => !RelicItemResolver.TerritoryToItemName.ContainsKey(z.TerritoryId) || !RelicItemResolver.IsComplete(z.TerritoryId)).ToList();
+            if (incomplete.Count > 0)
+            {
+                list = incomplete;
+            }
+        }
+
+        activeZones = list;
         if (activeZones.Count == 0)
         {
-            Diag("Start aborted: no zones selected.");
+            Diag("Start aborted: no zones selected (or all selected relic zones are already completed).");
+            ECommons.DalamudServices.Svc.Chat.PrintError("[FateFrenzy] Start aborted: all selected relic zones are already completed.");
             return;
         }
 

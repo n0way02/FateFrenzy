@@ -369,6 +369,33 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
             return GrindState.Unconscious;
         }
 
+        if (Plugin.Cfg.RelicModeEnabled)
+        {
+            if (AreAllRelicZonesComplete())
+            {
+                Status = "Stop condition met (Relic complete)";
+                Diag("All selected relic zones are complete (3+ demiatmas); exiting");
+                session.CompletedByStopCondition = true;
+                return GrindState.AllDone;
+            }
+
+            if (IsRelicZoneComplete(zone.TerritoryId))
+            {
+                if (zones.Count > 1 || Plugin.Cfg.EnableWorldRotation)
+                {
+                    Diag($"Relic zone {zone.Name} ({zone.TerritoryId}) is complete (3+ demiatmas); swapping zone.");
+                    return GrindState.SwapZone;
+                }
+                else
+                {
+                    Status = "Stop condition met (Relic zone complete)";
+                    Diag($"Relic zone {zone.Name} ({zone.TerritoryId}) is complete (3+ demiatmas) and no other zones selected; exiting");
+                    session.CompletedByStopCondition = true;
+                    return GrindState.AllDone;
+                }
+            }
+        }
+
         if (StopConditionMet())
             return GrindState.AllDone;
 
@@ -554,6 +581,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         {
             var candidateIndex = (zoneIndex + step) % zones.Count;
             if (session.UnreachableZoneIds.Contains(zones[candidateIndex].TerritoryId)) continue;
+            if (IsRelicZoneComplete(zones[candidateIndex].TerritoryId)) continue;
 
             if (candidateIndex == 0 && Plugin.Cfg.EnableWorldRotation)
             {
@@ -653,4 +681,25 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         await NextFrame(60);
     }
 
+    private bool IsRelicZoneComplete(uint territoryId)
+    {
+        if (!Plugin.Cfg.RelicModeEnabled) return false;
+        return RelicItemResolver.IsComplete(territoryId);
+    }
+
+    private bool AreAllRelicZonesComplete()
+    {
+        if (!Plugin.Cfg.RelicModeEnabled) return false;
+        var hasRelicZone = false;
+        foreach (var z in zones)
+        {
+            if (RelicItemResolver.TerritoryToItemName.ContainsKey(z.TerritoryId))
+            {
+                hasRelicZone = true;
+                if (!RelicItemResolver.IsComplete(z.TerritoryId))
+                    return false;
+            }
+        }
+        return hasRelicZone;
+    }
 }
