@@ -26,6 +26,8 @@ public sealed class AutoRepair : AutoCommon
         var cfg = Plugin.Cfg;
         ErrorIf(!cfg.AutoRepair, "Auto-repair is disabled.");
 
+        await ReviveIfDead();
+
         var before = RepairOps.LowestEquippedConditionPct();
         Diag($"AutoRepair start: lowest condition {before:F1}%, threshold {cfg.AutoRepairThresholdPct}%, mode {cfg.RepairMode}");
         Svc.Chat.Print($"[FateFrenzy] Repairing gear (lowest at {before:F0}%).");
@@ -90,11 +92,22 @@ public sealed class AutoRepair : AutoCommon
         var m = mender!.Value;
         Diag($"NPC repair: heading to {m.Name} (territory {m.TerritoryId}, DataId {m.DataId})");
 
+        await ReviveIfDead();
+
         if (Svc.ClientState.TerritoryType != m.TerritoryId)
         {
             var reached = false;
             await RunWithStatusPinned($"Teleporting to {m.Name}",
                 async () => reached = await TeleportToTerritory(m.TerritoryId, m.Position, "repair-teleport", TeleportWatchdogMs));
+
+            if (!reached && Svc.Condition[ConditionFlag.Unconscious])
+            {
+                Diag("Player died during teleport to mender. Reviving and retrying teleport...");
+                await ReviveIfDead();
+                await RunWithStatusPinned($"Teleporting to {m.Name} (retry)",
+                    async () => reached = await TeleportToTerritory(m.TerritoryId, m.Position, "repair-teleport-retry", TeleportWatchdogMs));
+            }
+
             ErrorIf(!reached, $"Could not reach {m.Name}'s zone (still in {Svc.ClientState.TerritoryType}); aborting repair.");
         }
 
@@ -202,5 +215,46 @@ public sealed class AutoRepair : AutoCommon
 
         RepairOps.CleanUpAllMenus();
         return RepairOps.LowestEquippedConditionPct() > Plugin.Cfg.AutoRepairThresholdPct + SelfRepairSuccessMarginPct;
+    }
+
+    private async Task ReviveIfDead()
+    {
+        if (Svc.Condition[ConditionFlag.Unconscious])
+        {
+            Diag("Player is dead during repair task. Releasing...");
+            try
+            {
+                GameMain.ExecuteCommand(200, 8, 0, 0, 0); // CommandFlag.Revive = 200, AgentReviveOp.Return = 8
+            }
+            catch (Exception ex)
+            {
+                Svc.Log.Warning(ex, "[FateFrenzy] ExecuteCommand revive return-home failed");
+            }
+
+            var deadline = Environment.TickCount64 + 30000;
+            var nextReissueAt = Environment.TickCount64 + 1500;
+            while (Environment.TickCount64 < deadline)
+            {
+                if (CancelToken.IsCancellationRequested) return;
+                var stillKO = Svc.Condition[ConditionFlag.Unconscious];
+                var transitioning = Svc.Condition[ConditionFlag.BetweenAreas]
+                                 || Svc.Condition[ConditionFlag.BetweenAreas51];
+                if (!stillKO && !transitioning)
+                {
+                    await DelayMs(1000); // settle weakness
+                    break;
+                }
+                if (stillKO && !transitioning && Environment.TickCount64 >= nextReissueAt)
+                {
+                    try
+                    {
+                        GameMain.ExecuteCommand(200, 8, 0, 0, 0);
+                    }
+                    catch {}
+                    nextReissueAt = Environment.TickCount64 + 1500;
+                }
+                await DelayMs(250);
+            }
+        }
     }
 }

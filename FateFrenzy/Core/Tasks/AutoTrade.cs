@@ -3,6 +3,8 @@ using FateFrenzy.Core.Trading;
 using FateFrenzy.Core.Zones;
 using clib.TaskSystem;
 using ECommons.DalamudServices;
+using Dalamud.Game.ClientState.Conditions;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using System.Threading.Tasks;
 
 namespace FateFrenzy.Core.Tasks;
@@ -34,6 +36,8 @@ public sealed class AutoTrade(uint targetItemId, uint originTerritoryId, Expansi
         Diag($"AutoTrade start: item={item!.ItemName}({item.ItemId}) trader={trader!.Name} terr={trader.TerritoryId} from={originTerritoryId}");
         Svc.Chat.Print($"[FateFrenzy] Auto-trade: {item.ItemName} ({item.CostPerOne} gems each) at {trader.Name}");
 
+        await ReviveIfDead();
+
         if (Svc.ClientState.TerritoryType != trader.TerritoryId)
         {
             var traderPos = trader.Position;
@@ -41,6 +45,15 @@ public sealed class AutoTrade(uint targetItemId, uint originTerritoryId, Expansi
             var reached = false;
             await RunWithStatusPinned($"Teleporting to {trader.Name}",
                 async () => reached = await TeleportToTerritory(traderTerr, traderPos, "trade-teleport", TeleportWatchdogMs));
+
+            if (!reached && Svc.Condition[ConditionFlag.Unconscious])
+            {
+                Diag("Player died during teleport to trader. Reviving and retrying teleport...");
+                await ReviveIfDead();
+                await RunWithStatusPinned($"Teleporting to {trader.Name} (retry)",
+                    async () => reached = await TeleportToTerritory(traderTerr, traderPos, "trade-teleport-retry", TeleportWatchdogMs));
+            }
+
             ErrorIf(!reached,
                 $"Could not reach {trader.Name}'s zone (still in {Svc.ClientState.TerritoryType}); aborting trade.");
         }
@@ -145,4 +158,45 @@ public sealed class AutoTrade(uint targetItemId, uint originTerritoryId, Expansi
     }
 
     private static int GemstoneCount() => GemstoneCatalog.CurrentWalletCount();
+
+    private async Task ReviveIfDead()
+    {
+        if (Svc.Condition[ConditionFlag.Unconscious])
+        {
+            Diag("Player is dead during trade task. Releasing...");
+            try
+            {
+                GameMain.ExecuteCommand(200, 8, 0, 0, 0); // CommandFlag.Revive = 200, AgentReviveOp.Return = 8
+            }
+            catch (Exception ex)
+            {
+                Svc.Log.Warning(ex, "[FateFrenzy] ExecuteCommand revive return-home failed");
+            }
+
+            var deadline = Environment.TickCount64 + 30000;
+            var nextReissueAt = Environment.TickCount64 + 1500;
+            while (Environment.TickCount64 < deadline)
+            {
+                if (CancelToken.IsCancellationRequested) return;
+                var stillKO = Svc.Condition[ConditionFlag.Unconscious];
+                var transitioning = Svc.Condition[ConditionFlag.BetweenAreas]
+                                 || Svc.Condition[ConditionFlag.BetweenAreas51];
+                if (!stillKO && !transitioning)
+                {
+                    await DelayMs(1000); // settle weakness
+                    break;
+                }
+                if (stillKO && !transitioning && Environment.TickCount64 >= nextReissueAt)
+                {
+                    try
+                    {
+                        GameMain.ExecuteCommand(200, 8, 0, 0, 0);
+                    }
+                    catch {}
+                    nextReissueAt = Environment.TickCount64 + 1500;
+                }
+                await DelayMs(250);
+            }
+        }
+    }
 }
