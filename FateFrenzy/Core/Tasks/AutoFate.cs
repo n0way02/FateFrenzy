@@ -92,6 +92,11 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     private long  zoneIdleSinceMs;
     private uint? abandonedFateId;
 
+    private bool  rotationSolverArmed;
+    private bool  wrathArmed;
+    private string? lastDodgeMode;
+    private float lastDodgeReach;
+
     private static readonly Random rng = new();
     private bool presetEnsured;
 

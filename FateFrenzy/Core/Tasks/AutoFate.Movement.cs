@@ -378,11 +378,19 @@ public sealed partial class AutoFate
         }
         else if (mode == "RotationSolver")
         {
-            Chat.ExecuteCommand("/rotation auto on");
+            if (!rotationSolverArmed)
+            {
+                Chat.ExecuteCommand("/rotation auto on");
+                rotationSolverArmed = true;
+            }
         }
         else if (mode == "Wrath")
         {
-            Chat.ExecuteCommand("/wrath auto on");
+            if (!wrathArmed)
+            {
+                Chat.ExecuteCommand("/wrath auto on");
+                wrathArmed = true;
+            }
         }
 
         EnableDodgingAI();
@@ -397,11 +405,19 @@ public sealed partial class AutoFate
         }
         else if (mode == "RotationSolver")
         {
-            Chat.ExecuteCommand("/rotation off");
+            if (rotationSolverArmed)
+            {
+                Chat.ExecuteCommand("/rotation off");
+                rotationSolverArmed = false;
+            }
         }
         else if (mode == "Wrath")
         {
-            Chat.ExecuteCommand("/wrath auto off");
+            if (wrathArmed)
+            {
+                Chat.ExecuteCommand("/wrath auto off");
+                wrathArmed = false;
+            }
         }
 
         DisableDodgingAI();
@@ -421,25 +437,30 @@ public sealed partial class AutoFate
         if (dodgeMode == "None") return;
 
         var reach = EngageReachMeters();
-        if (dodgeMode == "BossModReborn")
+        if (dodgeMode != lastDodgeMode || Math.Abs(reach - lastDodgeReach) > 0.01f)
         {
-            Diag($"Enabling BossMod Reborn dodging AI (reach: {reach:F1}m)");
-            Chat.ExecuteCommand("/bmrai on");
-            Chat.ExecuteCommand("/bmrai followtarget on");
-            Chat.ExecuteCommand("/bmrai followcombat on");
-            Chat.ExecuteCommand($"/bmrai maxdistancetarget {reach}");
-        }
-        else if (dodgeMode == "BossMod")
-        {
-            Diag($"Enabling BossMod dodging AI (reach: {reach:F1}m)");
-            Chat.ExecuteCommand("/vbmai on");
-            Chat.ExecuteCommand("/vbmai followtarget on");
-            Chat.ExecuteCommand("/vbmai followcombat on");
-            Chat.ExecuteCommand($"/vbmai maxdistancetarget {reach}");
-            if (rotationMode != "BossMod" && rotationMode != "BossModReborn")
+            if (dodgeMode == "BossModReborn")
             {
-                Chat.ExecuteCommand("/vbmai ForbidActions on");
+                Diag($"Enabling BossMod Reborn dodging AI (reach: {reach:F1}m)");
+                Chat.ExecuteCommand("/bmrai on");
+                Chat.ExecuteCommand("/bmrai followtarget on");
+                Chat.ExecuteCommand("/bmrai followcombat on");
+                Chat.ExecuteCommand($"/bmrai maxdistancetarget {reach}");
             }
+            else if (dodgeMode == "BossMod")
+            {
+                Diag($"Enabling BossMod dodging AI (reach: {reach:F1}m)");
+                Chat.ExecuteCommand("/vbmai on");
+                Chat.ExecuteCommand("/vbmai followtarget on");
+                Chat.ExecuteCommand("/vbmai followcombat on");
+                Chat.ExecuteCommand($"/vbmai maxdistancetarget {reach}");
+                if (rotationMode != "BossMod" && rotationMode != "BossModReborn")
+                {
+                    Chat.ExecuteCommand("/vbmai ForbidActions on");
+                }
+            }
+            lastDodgeMode = dodgeMode;
+            lastDodgeReach = reach;
         }
     }
 
@@ -455,26 +476,31 @@ public sealed partial class AutoFate
 
         if (dodgeMode == "None") return;
 
-        if (dodgeMode == "BossModReborn")
+        if (lastDodgeMode is not null)
         {
-            Diag("Disabling BossMod Reborn dodging AI");
-            Chat.ExecuteCommand("/bmrai off");
-            Chat.ExecuteCommand("/bmrai followtarget off");
-            Chat.ExecuteCommand("/bmrai followcombat off");
-            Chat.ExecuteCommand("/bmrai followoutofcombat off");
-        }
-        else if (dodgeMode == "BossMod")
-        {
-            Diag("Disabling BossMod dodging AI");
-            Chat.ExecuteCommand("/vbm ar disable");
-            Chat.ExecuteCommand("/vbmai off");
-            Chat.ExecuteCommand("/vbmai followtarget off");
-            Chat.ExecuteCommand("/vbmai followcombat off");
-            Chat.ExecuteCommand("/vbmai followoutofcombat off");
-            if (rotationMode != "BossMod" && rotationMode != "BossModReborn")
+            if (dodgeMode == "BossModReborn")
             {
-                Chat.ExecuteCommand("/vbmai ForbidActions off");
+                Diag("Disabling BossMod Reborn dodging AI");
+                Chat.ExecuteCommand("/bmrai off");
+                Chat.ExecuteCommand("/bmrai followtarget off");
+                Chat.ExecuteCommand("/bmrai followcombat off");
+                Chat.ExecuteCommand("/bmrai followoutofcombat off");
             }
+            else if (dodgeMode == "BossMod")
+            {
+                Diag("Disabling BossMod dodging AI");
+                Chat.ExecuteCommand("/vbm ar disable");
+                Chat.ExecuteCommand("/vbmai off");
+                Chat.ExecuteCommand("/vbmai followtarget off");
+                Chat.ExecuteCommand("/vbmai followcombat off");
+                Chat.ExecuteCommand("/vbmai followoutofcombat off");
+                if (rotationMode != "BossMod" && rotationMode != "BossModReborn")
+                {
+                    Chat.ExecuteCommand("/vbmai ForbidActions off");
+                }
+            }
+            lastDodgeMode = null;
+            lastDodgeReach = 0f;
         }
     }
 
