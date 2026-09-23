@@ -601,4 +601,209 @@ public sealed partial class AutoFate
         catch (Exception ex) { Svc.Log.Warning(ex, "[FateFrenzy] TextAdvance disable failed"); }
         textAdvanceArmed = false;
     }
+
+    // Resolves the collection item ID from the PublicEvent or internal FateContext
+    private static unsafe uint GetCollectItemId(PublicEvent fate)
+    {
+        if (fate.EventItem is { IsValid: true } item && item.ItemId > 0)
+            return item.ItemId;
+
+        if (fate.Address != nint.Zero)
+        {
+            var ctx = (FateContext*)fate.Address;
+            if (ctx != null)
+            {
+                if (ctx->TurnInEventItem > 0) return ctx->TurnInEventItem;
+                if (ctx->EventItem > 0) return ctx->EventItem;
+                if (ctx->ReqEventItem > 0) return ctx->ReqEventItem;
+            }
+        }
+        return 0;
+    }
+
+    // Returns how many of the FATE's collect item the player currently has (standard inventory + key items).
+    private static unsafe int GetCollectItemCount(uint itemId)
+    {
+        if (itemId == 0) return 0;
+        var inv = InventoryManager.Instance();
+        if (inv == null) return 0;
+        var count = inv->GetInventoryItemCount(itemId, false, false, false);
+        if (count <= 0)
+        {
+            count = inv->GetItemCountInContainer(itemId, InventoryType.KeyItems);
+        }
+        return count;
+    }
+
+    // Finds the collection hand-in NPC, checking MotivationNpc, EntityId match in Svc.Objects,
+    // and proximity to fate.Position.
+    private static Dalamud.Game.ClientState.Objects.Types.IGameObject? FindCollectNpc(PublicEvent fate)
+    {
+        if (fate.MotivationNpc is { IsTargetable: true } npc)
+            return npc;
+
+        var fateNpcId = fate.MotivationNpcId;
+        if (fateNpcId != 0 && fateNpcId != FateScanner.NoMotivationNpcId)
+        {
+            var match = Svc.Objects.FirstOrDefault(o => o.EntityId == fateNpcId && o.IsTargetable);
+            if (match != null) return match;
+        }
+
+        var fatePos = fate.Position;
+        Dalamud.Game.ClientState.Objects.Types.IGameObject? bestNear = null;
+        var bestDist = 20f;
+        foreach (var obj in Svc.Objects)
+        {
+            if (!obj.IsTargetable) continue;
+            if (obj.ObjectKind is Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventNpc
+                               or Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj)
+            {
+                var dist = Vector3.Distance(obj.Position, fatePos);
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    bestNear = obj;
+                }
+            }
+        }
+
+        return bestNear;
+    }
+
+    // Searches for the closest EventNpc/EventObj near the player as a fallback.
+    private static Dalamud.Game.ClientState.Objects.Types.IGameObject? FindClosestEventNpc(float maxRadius)
+    {
+        var player = Svc.Objects.LocalPlayer;
+        if (player is null) return null;
+
+        Dalamud.Game.ClientState.Objects.Types.IGameObject? closest = null;
+        var closestDist = maxRadius;
+
+        foreach (var obj in Svc.Objects)
+        {
+            if (!obj.IsTargetable) continue;
+            if (obj.ObjectKind is Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventNpc
+                               or Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj)
+            {
+                var dist = Vector3.Distance(player.Position, obj.Position);
+                if (dist < closestDist)
+                {
+                    closestDist = dist;
+                    closest = obj;
+                }
+            }
+        }
+        return closest;
+    }
+
+    // Navigates by coordinate to the collection NPC, targets it, and executes the hand-in.
+    private async Task DoCollectHandInByCoordinate(uint fateId)
+    {
+        var fate = PublicEvent.GetFateById(fateId) ?? PublicEvent.CurrentFate;
+        if (fate is null) return;
+
+        var itemId = GetCollectItemId(fate);
+        var startCount = GetCollectItemCount(itemId);
+        if (startCount == 0 && fate.Progress < 100)
+        {
+            Diag($"DoCollectHandInByCoordinate: no items to hand in (item {itemId}).");
+            return;
+        }
+
+        Status = $"Turning in items for {fate.Name}";
+        Diag($"Starting hand-in for {fate.Name} ({fateId}), items in bag: {startCount}");
+
+        try
+        {
+            EnableTextAdvanceForCollect();
+
+            var npc = FindCollectNpc(fate);
+            var targetPos = npc?.Position ?? fate.Position;
+
+            Diag($"Moving towards hand-in coordinate {targetPos} (NPC: {(npc != null ? $"{npc.Name} [0x{npc.EntityId:X}]" : "not rendered, heading to fate.Position")})");
+
+            var handInLabel = $"Turning in {fate.Name}";
+            var move = new MoveOp(o => o.Move(zone.TerritoryId, targetPos,
+                MovementConfig.InteractRange,
+                allowTeleportIfFaster: false,
+                stopCondition: () =>
+                {
+                    Status = handInLabel;
+                    if (PublicEvent.GetFateById(fateId) is null) return true;
+                    if (npc is null || !npc.IsTargetable)
+                    {
+                        var liveFate = PublicEvent.GetFateById(fateId);
+                        if (liveFate != null)
+                            npc = FindCollectNpc(liveFate);
+                    }
+                    if (npc != null && npc.IsTargetable)
+                    {
+                        var player = Svc.Objects.LocalPlayer;
+                        if (player != null && Vector3.Distance(player.Position, npc.Position) <= 3.0f)
+                            return true;
+                    }
+                    return false;
+                },
+                allowAethernetWithinTerritory: false));
+
+            await RunCancellable(move, ActivateMoveWatchdogMs, $"collect-move-{fateId}");
+
+            if (CancelToken.IsCancellationRequested) return;
+            if (PublicEvent.GetFateById(fateId) is not { } live) return;
+            fate = live;
+
+            if (Svc.Condition[ConditionFlag.Mounted])
+                await DismountViaOp($"dismount-handin-{fateId}");
+
+            // Look for NPC at arrival spot
+            var searchDeadline = Environment.TickCount64 + 5_000;
+            while (Environment.TickCount64 < searchDeadline && !CancelToken.IsCancellationRequested)
+            {
+                npc = FindCollectNpc(fate);
+                if (npc != null && npc.IsTargetable) break;
+                await NextFrame(10);
+                fate = PublicEvent.GetFateById(fateId) ?? fate;
+            }
+
+            if (npc is null || !npc.IsTargetable)
+            {
+                Diag($"Collect NPC for {fateId} not found by ID; searching closest EventNpc near player...");
+                npc = FindClosestEventNpc(15f);
+            }
+
+            if (npc is null || !npc.IsTargetable)
+            {
+                Diag($"Hand-in NPC not found for {fateId} near {targetPos}.");
+                return;
+            }
+
+            Diag($"Interacting with hand-in NPC {npc.Name} [0x{npc.EntityId:X}] at {npc.Position}");
+            Svc.Targets.Target = npc;
+
+            var interact = new MoveOp(o => o.Interact(npc,
+                waitUntil: () =>
+                {
+                    if (PublicEvent.GetFateById(fateId) is null) return true;
+                    return GetCollectItemCount(itemId) == 0;
+                },
+                skip: UiSkipOptions.Talk | UiSkipOptions.YesNo));
+
+            await RunCancellable(interact, NpcSpawnTimeoutMs, $"collect-interact-{fateId}");
+
+            // Brief delay for inventory and handover window to settle
+            var settleDeadline = Environment.TickCount64 + 4_000;
+            while (Environment.TickCount64 < settleDeadline && !CancelToken.IsCancellationRequested)
+            {
+                if (GetCollectItemCount(itemId) == 0) break;
+                await NextFrame(10);
+            }
+
+            var remaining = GetCollectItemCount(itemId);
+            Diag($"Hand-in complete for {fateId}. Items remaining: {remaining}");
+        }
+        catch (Exception ex)
+        {
+            Diag($"DoCollectHandInByCoordinate caught: {ex.Message}");
+        }
+    }
 }

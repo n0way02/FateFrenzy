@@ -134,6 +134,10 @@ public sealed class Configuration : IPluginConfiguration
     public bool CompletedTutorial { get; set; } = false;
     public string TutorialLanguage { get; set; } = "en";
 
+    // When false (default), stopping the plugin disables TextAdvance (original behaviour).
+    // When true, TextAdvance state is left untouched on stop.
+    public bool KeepTextAdvanceOnStop { get; set; } = false;
+
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
 
     public void SaveDebounced()

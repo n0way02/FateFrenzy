@@ -45,7 +45,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     private const int   CollectExpiryTimeoutMs = 90_000;
     private const int   EngageStallTimeoutMs = 60_000;
     private const int   EngageOutOfCombatGraceMs = 30_000;
-    private const float EngageMeleeReachMeters  = 6f;
+    private const float EngageMeleeReachMeters  = 2.5f;
     private const float EngageRangedReachMeters = 15f;
     private const float EngageApproachProgressMeters = 2f;
     private const int   EngageReachStallMs = 1500;
@@ -53,6 +53,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     private const float EngageMeleeApproachToleranceMeters  = 2.5f;
     private const float EngageRangedApproachToleranceMeters = 5f;
     private const int   MaxEngageRepositions = 3;
+    private const int   CollectHandInThreshold = 10;
     // Cap on fighting off a mob that aggroed mid-travel, so an unkillable add can't park the run.
     private const int   CombatClearTimeoutMs = 30_000;
     private const int   RaiseWaitMs = 30_000;
@@ -118,6 +119,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         Unconscious,          // Player KO'd, run revive.
         WaitingForFollowUp,   // Just finished a chain parent; hold briefly for sequel.
         WaitingForExpiry,     // Collect FATE complete; hold zone until row clears for rewards.
+        CollectHandIn,        // Collect FATE at 100%; walk to NPC and deliver the items.
         BetweenFates,         // Have a target FATE; move (or activate prep NPC) and arrive.
         Engaging,             // CurrentFate is set; fight until it ends or we KO.
         WaitingForFates,      // No eligible FATE; idle-scan with optional zone swap.
@@ -260,6 +262,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
 
                 case GrindState.WaitingForFollowUp:
                     await TickFollowUpWait();
+                    break;
+
+                case GrindState.CollectHandIn:
+                    await DoCollectHandIn();
                     break;
 
                 case GrindState.WaitingForExpiry:
@@ -414,16 +420,23 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         // frame; routing that to Engaging (which returns instantly) would spin and freeze the game.
         if (PublicEvent.CurrentFate is { State: FateState.Running } current && abandonedFateId != current.Id)
         {
-            // Hold a completed Collect until out of combat so a stray mob can't trap us mid-deactivation.
+            // Collect FATE at 100%: hand in items while still Running, then wait for expiry rewards.
             if (current is { Rule: PublicEvent.FateRule.Collect, Progress: >= 100, Id: var cid })
             {
-                if (waitForExpiryFateId != cid)
-                {
-                    waitForExpiryFateId = cid;
-                    waitForExpiryStartedAtMs = Environment.TickCount64;
-                }
                 if (!Svc.Condition[ConditionFlag.InCombat])
+                {
+                    var itemId = GetCollectItemId(current);
+                    var hasItems = GetCollectItemCount(itemId) > 0;
+                    if (hasItems)
+                        return GrindState.CollectHandIn;
+
+                    if (waitForExpiryFateId != cid)
+                    {
+                        waitForExpiryFateId = cid;
+                        waitForExpiryStartedAtMs = Environment.TickCount64;
+                    }
                     return GrindState.WaitingForExpiry;
+                }
             }
             if (current.Progress >= 100)
                 StartFollowUpWatch(current.Id);
@@ -678,6 +691,24 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         var remaining = Math.Max(0L, followUpWatchUntilMs - Environment.TickCount64);
         Status = $"Watching for follow-up FATE ({remaining / 1000 + 1}s)";
         await NextFrame(100);
+    }
+
+    // Walk to the collection NPC and deliver items when a Collect FATE hits 100%.
+    private async Task DoCollectHandIn()
+    {
+        var fate = PublicEvent.CurrentFate;
+        if (fate is null || fate.Rule != PublicEvent.FateRule.Collect)
+            return;
+
+        var fateId = fate.Id;
+        await DoCollectHandInByCoordinate(fateId);
+
+        // After hand-in, arm expiry watch so rewards settle before we move on.
+        if (waitForExpiryFateId != fateId)
+        {
+            waitForExpiryFateId = fateId;
+            waitForExpiryStartedAtMs = Environment.TickCount64;
+        }
     }
 
     private async Task TickExpiryWait()

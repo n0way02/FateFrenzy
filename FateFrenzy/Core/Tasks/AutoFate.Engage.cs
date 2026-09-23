@@ -208,6 +208,39 @@ public sealed partial class AutoFate
                     collectTextAdvanceArmed = true;
                 }
 
+                // Hit collect threshold or FATE 100% with items: finish current mob, stop combat, and hand in by coordinate.
+                if (fate.Rule == PublicEvent.FateRule.Collect)
+                {
+                    var collectItemId = GetCollectItemId(fate);
+                    var collectCount = GetCollectItemCount(collectItemId);
+                    if (collectCount >= CollectHandInThreshold || (fate.Progress >= 100 && collectCount > 0))
+                    {
+                        Diag($"Collect FATE {fateId}: holding {collectCount} items (threshold {CollectHandInThreshold}). Finishing current mob and heading to NPC.");
+
+                        // 1. Finish current mob being attacked
+                        await FinishCurrentCombatTarget();
+
+                        // 2. Immediately stop combat
+                        ClearActiveCombatPreset();
+                        Svc.Targets.Target = null;
+                        NavmeshIPC.Instance.Stop();
+
+                        // 3. Hand in items to NPC by coordinate
+                        await DoCollectHandInByCoordinate(fateId);
+
+                        // 4. Evaluate if FATE is still running or completed
+                        var afterFate = PublicEvent.GetFateById(fateId);
+                        if (afterFate is null || afterFate.Progress >= 100 || afterFate.State != FateState.Running)
+                        {
+                            Diag($"Collect FATE {fateId} ended or hit 100% after hand-in.");
+                            break;
+                        }
+
+                        Diag($"Collect FATE {fateId} continuing ({afterFate.Progress}%). Resuming combat.");
+                        AssertPresetActive(preset);
+                    }
+                }
+
                 if (await TickEngagementWatchdog(fateId, fate, reach)) break;
 
                 await NextFrame(30);
@@ -259,6 +292,26 @@ public sealed partial class AutoFate
         }
 
         return ExitReason.Continue;
+    }
+
+    private async Task FinishCurrentCombatTarget()
+    {
+        if (Svc.Targets.Target is not IBattleNpc target || target.IsDead || target.CurrentHp == 0)
+            return;
+
+        Diag($"Finishing current mob {target.Name} (HP: {target.CurrentHp}/{target.MaxHp}) before hand-in...");
+        var deadline = Environment.TickCount64 + 15_000;
+        while (Environment.TickCount64 < deadline && !CancelToken.IsCancellationRequested)
+        {
+            if (target is null || target.IsDead || target.CurrentHp == 0)
+                break;
+
+            if (Svc.Targets.Target is not IBattleNpc currentTarget || currentTarget.EntityId != target.EntityId)
+                break;
+
+            await NextFrame(10);
+        }
+        Diag("Finished current mob or target changed.");
     }
 
     private static float EngageReachMeters()

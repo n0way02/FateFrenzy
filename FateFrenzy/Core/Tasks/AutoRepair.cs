@@ -71,12 +71,12 @@ public sealed class AutoRepair : AutoCommon
             await RunCancellable(new MoveOp(o => o.DismountNow()), DismountWatchdogMs, "repair-dismount");
 
         Status = "Opening Repair";
-        Diag("Triggering /repair command");
-        Chat.ExecuteCommand("/repair");
+        Diag("Triggering /ac repair command");
+        Chat.ExecuteCommand("/ac repair");
 
         if (!await WaitUntilTimed(RepairOps.RepairAddonOpen, RepairAddonWaitMs, "self-wait-repair-addon"))
         {
-            Diag("Repair addon never opened after /repair command.");
+            Diag("Repair addon never opened after /ac repair command.");
             return false;
         }
 

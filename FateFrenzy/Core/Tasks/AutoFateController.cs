@@ -133,7 +133,8 @@ internal sealed partial class AutoFateController
         PauseReason = PauseReason.None;
         Svc.Automation.Stop();
 
-        if (ExternalPlugins.IsInstalled(ExternalPlugin.TextAdvance) && TextAdvanceIPC.IsPluginEnabled())
+        if (!Plugin.Cfg.KeepTextAdvanceOnStop
+            && ExternalPlugins.IsInstalled(ExternalPlugin.TextAdvance) && TextAdvanceIPC.IsPluginEnabled())
         {
             Chat.ExecuteCommand("/at");
         }

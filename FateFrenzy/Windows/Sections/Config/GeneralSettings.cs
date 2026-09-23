@@ -64,6 +64,15 @@ internal static class GeneralSettings
             SettingsControls.ToggleWidth,
             () => SettingsControls.DrawToggle(cfg, () => cfg.AutoResumeAfterDisconnect, v => cfg.AutoResumeAfterDisconnect = v, "##gen_autoresume_dc"),
             SettingsRow.ToggleHeight);
+
+        if (FateFrenzy.Core.External.ExternalPlugins.IsInstalled(FateFrenzy.Core.External.ExternalPlugin.TextAdvance))
+        {
+            SettingsRow.Draw("Keep TextAdvance on when stopping",
+                "By default, stopping FateFrenzy disables TextAdvance (the same way it was disabled at startup). Enable this option to leave TextAdvance running after the plugin stops.",
+                SettingsControls.ToggleWidth,
+                () => SettingsControls.DrawToggle(cfg, () => cfg.KeepTextAdvanceOnStop, v => cfg.KeepTextAdvanceOnStop = v, "##gen_keep_textadv"),
+                SettingsRow.ToggleHeight);
+        }
     }
 
     private static void DrawCombatGroup(Configuration cfg)
