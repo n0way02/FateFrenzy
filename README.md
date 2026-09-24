@@ -46,18 +46,38 @@ For FateFrenzy to operate fully, you should have the following Dalamud plugins i
 
 ## Installation & Commands ⚙️
 
-1. Clone or download this repository.
-2. Open the solution file `FateFrenzy.sln` and compile the project using Visual Studio or Rider.
-3. Add the compiled `FateFrenzy.dll` path as a developer plugin in Dalamud.
-4. Open the plugin interface in-game with:
-   - `/fatefrenzy` (primary command)
-   - `/ff` (alias)
+### Method 1: Custom Plugin Repository (Recommended) ⭐
 
-### Command Parameters:
+1. In-game, open Dalamud Settings by typing `/xlsettings` in the chat.
+2. Navigate to the **Experimental** tab.
+3. Scroll down to **Custom Plugin Repositories**, paste the following URL into the box:
+   ```
+   https://raw.githubusercontent.com/n0way02/FateFrenzy/main/repo/pluginmaster.json
+   ```
+4. Click the **+** (Add) button and then click **Save and Close** at the bottom right.
+5. Open the Plugin Installer with `/xlplugins`.
+6. Search for **FateFrenzy** and click **Install**!
+
+---
+
+### Method 2: Manual / Developer Build 🛠️
+
+1. Clone or download this repository.
+2. Compile the project in Release configuration:
+   ```bash
+   dotnet build -c Release
+   ```
+3. In Dalamud Settings (`/xlsettings` → **Experimental**), add `FateFrenzy/bin/Release/FateFrenzy.dll` to your Dev Plugins list.
+
+---
+
+### Commands 💬
+
+- `/fatefrenzy` (or `/ff`) — Open the primary FateFrenzy dashboard.
 - `/ff config` — Open configuration settings.
 - `/ff stats` — Open run history and statistics.
 - `/ff deps` — Open dependency checker.
-- `/ff pause` — Pauses or resumes the active loop.
+- `/ff pause` — Pause or resume the active farming loop.
 
 ---
 
