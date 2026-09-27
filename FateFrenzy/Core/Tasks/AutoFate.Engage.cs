@@ -191,14 +191,15 @@ public sealed partial class AutoFate
 
                 if (Svc.Condition[ConditionFlag.Mounted])
                 {
+                    // Only clear+reassert when we actually need to dismount — avoids the
+                    // disable→enable spam every loop tick that makes BMRAI flicker off/on.
                     ClearActiveCombatPreset();
                     await DismountViaOp($"dismount-engage-{fateId}");
-                    AssertPresetActive(preset);
                 }
-                else
-                {
-                    AssertPresetActive(preset);
-                }
+
+                // Re-assert each tick so the preset stays active if it was cleared by anything
+                // (dismount above, initial entry, or external change).
+                AssertPresetActive(preset);
 
                 SyncToFate(fateId);
 
@@ -220,7 +221,7 @@ public sealed partial class AutoFate
                         // 1. Finish current mob being attacked
                         await FinishCurrentCombatTarget();
 
-                        // 2. Immediately stop combat
+                        // 2. Pause combat AI while we walk to the NPC
                         ClearActiveCombatPreset();
                         Svc.Targets.Target = null;
                         NavmeshIPC.Instance.Stop();
@@ -236,6 +237,11 @@ public sealed partial class AutoFate
                             break;
                         }
 
+                        // Re-arm rotation/dodging AI for the next combat wave.
+                        // Reset lastDodgeMode so EnableDodgingAI re-sends all commands cleanly
+                        // instead of thinking they are already active (they were just cleared above).
+                        lastDodgeMode = null;
+                        lastDodgeReach = 0f;
                         Diag($"Collect FATE {fateId} continuing ({afterFate.Progress}%). Resuming combat.");
                         AssertPresetActive(preset);
                     }
