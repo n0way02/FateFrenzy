@@ -218,6 +218,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
             {
                 Diag($"State {lastObservedState} -> {state}");
                 if (state != GrindState.WrongZone) consecutiveZoneTeleportFailures = 0;
+
+                // When we leave Engaging, tear down the combat preset here rather than
+                // trusting the EngageCurrentFate finally — the finally now intentionally
+                // skips the teardown when the FATE is still running (to avoid BMRAI flicker).
+                if (lastObservedState == GrindState.Engaging && state != GrindState.Engaging)
+                    ClearActiveCombatPreset();
+
                 lastObservedState = state;
                 lastStateChangedAtMs = Environment.TickCount64;
             }

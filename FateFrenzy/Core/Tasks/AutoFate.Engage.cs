@@ -254,7 +254,19 @@ public sealed partial class AutoFate
         }
         finally
         {
-            ClearActiveCombatPreset();
+            // Only tear down the combat preset when the FATE is truly over.
+            // If it is still Running (e.g. we exited due to a stall timeout, a reposition
+            // blacklist, or a brief GetFateById null) the state machine will immediately
+            // re-enter EngageCurrentFate — clearing here just produces the BMRAI off→on
+            // flicker that the user sees in chat. Leave the preset active so combat
+            // continues seamlessly. ClearActiveCombatPreset is still called by:
+            //   • AutoFate.Recovery  when the player dies
+            //   • ClearBlockingCombat when stuck in combat during travel
+            //   • The normal FATE-ended path below (via OnFateEnded / state transition)
+            var fateStillRunning = !CancelToken.IsCancellationRequested
+                                && PublicEvent.GetFateById(fateId) is { State: FateState.Running };
+            if (!fateStillRunning)
+                ClearActiveCombatPreset();
             if (collectTextAdvanceArmed) DisableTextAdvance();
         }
 
