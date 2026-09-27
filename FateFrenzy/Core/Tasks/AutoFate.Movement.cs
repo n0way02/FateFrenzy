@@ -280,7 +280,11 @@ public sealed partial class AutoFate
         }
         finally
         {
-            ClearActiveCombatPreset();
+            // Skip teardown if a FATE appeared — the state machine transitions to Engaging
+            // immediately and AssertPresetActive will re-arm BMRAI, so clearing here would
+            // produce a needless off→on flicker in chat.
+            if (PublicEvent.CurrentFate is not { State: FateState.Running })
+                ClearActiveCombatPreset();
         }
 
         if (Svc.Condition[ConditionFlag.InCombat])

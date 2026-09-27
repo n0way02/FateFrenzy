@@ -191,14 +191,13 @@ public sealed partial class AutoFate
 
                 if (Svc.Condition[ConditionFlag.Mounted])
                 {
-                    // Only clear+reassert when we actually need to dismount — avoids the
-                    // disable→enable spam every loop tick that makes BMRAI flicker off/on.
-                    ClearActiveCombatPreset();
+                    // Dismount without tearing down the combat preset — BMRAI must stay active
+                    // so the rotation continues as soon as the player lands. Calling Clear here
+                    // was the root cause of the on→off flicker seen in chat.
                     await DismountViaOp($"dismount-engage-{fateId}");
                 }
 
-                // Re-assert each tick so the preset stays active if it was cleared by anything
-                // (dismount above, initial entry, or external change).
+                // Ensure the preset is (or stays) active after any dismount or external change.
                 AssertPresetActive(preset);
 
                 SyncToFate(fateId);
