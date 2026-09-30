@@ -52,7 +52,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     private const int   EngageRepositionWatchdogMs = 25_000;
     private const float EngageMeleeApproachToleranceMeters  = 2.5f;
     private const float EngageRangedApproachToleranceMeters = 5f;
-    private const int   MaxEngageRepositions = 3;
+    private const int   MaxEngageRepositions = 10;
     private const int   CollectHandInThreshold = 10;
     // Cap on fighting off a mob that aggroed mid-travel, so an unkillable add can't park the run.
     private const int   CombatClearTimeoutMs = 30_000;

@@ -348,6 +348,15 @@ public sealed partial class AutoFate
         if (Svc.Objects.LocalPlayer is not { } player) return false;
         if (player.IsCasting) return false;
 
+        // If in combat, BMRAI is actively fighting — the player oscillating in/out of the
+        // target circle is normal melee behaviour, not a stuck. Skip the watchdog entirely
+        // to avoid spurious repositions that waste movement and consume the reposition budget.
+        if (Svc.Condition[ConditionFlag.InCombat])
+        {
+            reach.Restart();
+            return false;
+        }
+
         Vector3 targetPos;
         float targetDistance;
 
@@ -373,7 +382,7 @@ public sealed partial class AutoFate
 
         if (reach.Repositions >= MaxEngageRepositions)
         {
-            Diag($"FATE {fateId} ({fateName}) unreachable: still {targetDistance:F0}m from target after {MaxEngageRepositions} repositions; abandoning and blacklisting for this session");
+            Diag($"FATE {fateId} ({fateName}) unreachable: still {targetDistance:F0}m from target after {MaxEngageRepositions} repositions (all out of combat); abandoning and blacklisting for this session");
             abandonedFateId = fateId;
             sessionStuckFateIds.Add(fateId);
             return true;
