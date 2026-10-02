@@ -690,6 +690,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                 FoodOps.UseConsumable(entry);
                 return false;
             }, ConsumeItemWaitMs, $"consume-{entry.ItemId}", checkFrames: 100);
+
+            // Wait for the food cast to finish before moving on. Without this, PrepareForTeleport
+            // can race the cast and get stuck waiting for Casting to clear, freezing teleports.
+            if (!CancelToken.IsCancellationRequested)
+                await WaitUntilTimed(
+                    () => !Svc.Condition[ConditionFlag.Casting],
+                    4_000, $"consume-cast-settle-{entry.ItemId}");
         }
     }
 

@@ -116,11 +116,18 @@ public sealed partial class AutoFate
                         am->UseAction(ActionType.Item, 4868, extraParam: 65535);
                     }
                 }
-                await DelayMs(3000); // Wait for summon cast/spawn
+
+                // Wait for the summon cast/animation to finish before proceeding.
+                // A fixed sleep is unreliable — wait for Casting to clear instead so that
+                // any subsequent teleport or food use doesn't collide with this cast.
+                await WaitUntilTimed(
+                    () => !Svc.Condition[ConditionFlag.Casting],
+                    6_000, "chocobo-summon-cast-settle");
+                await DelayMs(500); // brief settle after cast ends
 
                 Diag($"Setting chocobo stance to {stance}");
                 Chat.ExecuteCommand($"/cac \"{stance} stance\"");
-                await DelayMs(1000);
+                await DelayMs(500);
             }
         }
     }
