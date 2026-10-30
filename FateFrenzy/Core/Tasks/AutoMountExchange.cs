@@ -7,6 +7,7 @@ using FateFrenzy.Core.Game.Ops;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
+using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 
@@ -16,7 +17,12 @@ public sealed class AutoMountExchange : AutoCommon
 {
     private const uint MorDhonaTerritoryId = 156;
     private const uint EdelinaEnpcBaseId = 1036913;
-    private static readonly Vector3 EdelinaPos = new(22.19f, 4.89f, -8.01f);
+
+    // Converted world coordinates for Mor Dhona Map X: 22.2, Y: 4.8, Z: 0.5
+    // X_world = (22.2 - 1) * 51.2 - 1024 = 61.44f
+    // Y_world (height) = 0.5f
+    // Z_world = (4.8 - 1) * 51.2 - 1024 = -829.44f
+    private static readonly Vector3 EdelinaFallbackWorldPos = new(61.44f, 0.5f, -829.44f);
 
     private const int TeleportWatchdogMs = 60_000;
     private const int MoveWatchdogMs = 120_000;
@@ -33,17 +39,17 @@ public sealed class AutoMountExchange : AutoCommon
     {
         var targetItemId = Plugin.Cfg.MountTargetItemId;       // 43590 (Ty'aitya Whistle)
         var targetVoucherId = Plugin.Cfg.MountTargetVoucherId; // 43961 (Turali Bicolor Gemstone Voucher)
-        var requiredVouchers = Plugin.Cfg.MountBuyerThreshold;  // 500
+        const int RequiredVouchers = 500; // Whistle exchange is strictly 500 vouchers
 
         var currentVouchers = CurrentVoucherCount(targetVoucherId);
-        if (currentVouchers < requiredVouchers)
+        if (currentVouchers < RequiredVouchers)
         {
-            Diag($"AutoMountExchange aborted: has {currentVouchers} vouchers, needs {requiredVouchers}.");
+            Diag($"AutoMountExchange aborted: has {currentVouchers} vouchers, strictly needs {RequiredVouchers}.");
             return;
         }
 
-        Diag($"AutoMountExchange starting: target whistle {targetItemId}, voucher {targetVoucherId} count={currentVouchers}");
-        Svc.Chat.Print($"[FateFrenzy] Exchanging {requiredVouchers} vouchers for Mount Whistle at Edelina in Mor Dhona...");
+        Diag($"AutoMountExchange starting: target whistle {targetItemId}, vouchers={currentVouchers}");
+        Svc.Chat.Print($"[FateFrenzy] Exchanging {RequiredVouchers} vouchers for Ty'aitya Whistle at Edelina in Mor Dhona...");
 
         await ReviveIfDead();
 
@@ -52,32 +58,38 @@ public sealed class AutoMountExchange : AutoCommon
         {
             var reached = false;
             await RunWithStatusPinned("Teleporting to Mor Dhona",
-                async () => reached = await TeleportToTerritory(MorDhonaTerritoryId, EdelinaPos, "mount-teleport", TeleportWatchdogMs));
+                async () => reached = await TeleportToTerritory(MorDhonaTerritoryId, EdelinaFallbackWorldPos, "mount-teleport", TeleportWatchdogMs));
 
             if (!reached && Svc.Condition[ConditionFlag.Unconscious])
             {
                 await ReviveIfDead();
                 await RunWithStatusPinned("Teleporting to Mor Dhona (retry)",
-                    async () => reached = await TeleportToTerritory(MorDhonaTerritoryId, EdelinaPos, "mount-teleport-retry", TeleportWatchdogMs));
+                    async () => reached = await TeleportToTerritory(MorDhonaTerritoryId, EdelinaFallbackWorldPos, "mount-teleport-retry", TeleportWatchdogMs));
             }
 
             ErrorIf(!reached, $"Could not reach Mor Dhona (still in {Svc.ClientState.TerritoryType}); aborting mount exchange.");
         }
 
-        // 2. Walk to Edelina
+        // 2. Resolve Edelina location
+        var npc = RepairOps.FindNearestObjectByBaseId(EdelinaEnpcBaseId)
+               ?? Svc.Objects.FirstOrDefault(o => o.Name.ToString().Equals("Edelina", StringComparison.OrdinalIgnoreCase));
+        var targetPos = npc?.Position ?? EdelinaFallbackWorldPos;
+
+        // 3. Walk on FOOT (GroundMove only, never fly into sky) to Edelina
         await RunWithStatusPinned("Walking to Edelina", async () =>
         {
-            var move = new MoveOp(o => o.Move(MorDhonaTerritoryId, EdelinaPos,
-                MovementConfig.Everything.WithTolerance(3.5f),
+            var move = new MoveOp(o => o.Move(MorDhonaTerritoryId, targetPos,
+                MovementConfig.GroundMove.WithTolerance(2.5f),
                 allowTeleportIfFaster: false,
                 stopCondition: null,
-                allowAethernetWithinTerritory: true));
+                allowAethernetWithinTerritory: false));
             await RunCancellable(move, MoveWatchdogMs, "mount-walk");
         });
 
-        // 3. Find and interact with Edelina
-        var npc = RepairOps.FindNearestObjectByBaseId(EdelinaEnpcBaseId);
-        ErrorIf(npc is null, "Could not find Edelina (ENpcBase 1036913) in Revenant's Toll.");
+        // 4. Find and interact with Edelina
+        npc ??= RepairOps.FindNearestObjectByBaseId(EdelinaEnpcBaseId)
+             ?? Svc.Objects.FirstOrDefault(o => o.Name.ToString().Equals("Edelina", StringComparison.OrdinalIgnoreCase));
+        ErrorIf(npc is null, "Could not find Edelina in Revenant's Toll.");
 
         Status = "Interacting with Edelina";
         var interact = new MoveOp(o => o.Interact(npc!,
@@ -90,7 +102,7 @@ public sealed class AutoMountExchange : AutoCommon
                 ShopOpenWaitMs, "wait-edelina-menu"),
             "Edelina did not open a menu within timeout; aborting.");
 
-        // 4. If submenu open, pick "Bicolor Gemstone Vouchers"
+        // 5. If submenu open, pick "Bicolor Gemstone Vouchers"
         if (ShopInteraction.SelectIconStringOpen())
         {
             await NavigateEdelinaMenu();
@@ -99,7 +111,7 @@ public sealed class AutoMountExchange : AutoCommon
         ErrorIf(!ShopInteraction.ShopExchangeCurrencyOpen(),
             "Could not open Edelina's voucher exchange shop.");
 
-        // 5. Buy Whistle
+        // 6. Buy Whistle
         var vouchersBefore = CurrentVoucherCount(targetVoucherId);
         var whistleBefore = CurrentWhistleCount(targetItemId);
 
@@ -127,7 +139,7 @@ public sealed class AutoMountExchange : AutoCommon
         if (whistleAfter > whistleBefore)
         {
             ExchangeSuccess = true;
-            Svc.Chat.Print("[FateFrenzy] Mount Whistle acquired successfully!");
+            Svc.Chat.Print("[FateFrenzy] Mount Whistle acquired successfully! Preparing Retainer listing...");
         }
         else
         {
@@ -158,7 +170,6 @@ public sealed class AutoMountExchange : AutoCommon
             }
         }
 
-        // Fallback: click first entry
         if (ShopInteraction.SelectIconStringOpen())
         {
             ShopInteraction.ClickSelectIconString(0);

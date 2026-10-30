@@ -36,9 +36,9 @@ public sealed partial class AutoFate
         // 2. Master Seller or Solo reached 500 vouchers -> go exchange at Edelina in Mor Dhona
         if (Plugin.Cfg.MountRole is MountAutomationRole.MasterSeller or MountAutomationRole.Solo)
         {
-            if (voucherCount >= Plugin.Cfg.MountBuyerThreshold)
+            if (voucherCount >= 500)
             {
-                Diag($"Vouchers ({voucherCount}/{Plugin.Cfg.MountBuyerThreshold}) reached; queueing mount exchange at Edelina.");
+                Diag($"500 vouchers reached ({voucherCount}/500); queueing mount exchange at Edelina.");
                 session.PendingMountExchange = true;
                 session.PendingMountExchangeFromZone = zone;
                 return true;

@@ -62,7 +62,7 @@ internal static class VoucherMountSettings
         if (cfg.MountRole == MountAutomationRole.Supplier)
         {
             SettingsRow.Draw("Supplier Transfer Threshold",
-                "Number of vouchers this character farms before pausing FATEs to hand them off to the Master Seller.",
+                "Number of vouchers this character farms before pausing FATEs to hand them off to the Master Seller at the Mor Dhona crystal.",
                 SettingsControls.RowSliderWidth,
                 () => SettingsControls.DrawIntSlider(cfg, "##supp_threshold",
                     () => cfg.MountSupplierThreshold, v => cfg.MountSupplierThreshold = Math.Clamp(v, 10, 500),
@@ -70,12 +70,7 @@ internal static class VoucherMountSettings
         }
         else if (cfg.MountRole == MountAutomationRole.MasterSeller)
         {
-            SettingsRow.Draw("Master Exchange Threshold",
-                "Number of vouchers required before travelling to Edelina in Mor Dhona to exchange for the Mount Whistle.",
-                SettingsControls.RowSliderWidth,
-                () => SettingsControls.DrawIntSlider(cfg, "##buyer_threshold",
-                    () => cfg.MountBuyerThreshold, v => cfg.MountBuyerThreshold = Math.Clamp(v, 100, 500),
-                    100, 500, "%d vouchers"));
+            SettingsRow.Note("Master Seller collects vouchers from Suppliers at the Mor Dhona Aetheryte crystal, and once reaching 500 vouchers, automatically exchanges them for the Ty'aitya Whistle at Edelina and lists it on your Retainer.");
         }
 
         if (cfg.MountRole != MountAutomationRole.Solo)
