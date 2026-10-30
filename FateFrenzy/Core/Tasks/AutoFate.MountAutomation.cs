@@ -45,7 +45,8 @@ public sealed partial class AutoFate
             }
         }
 
-        // 3. Supplier reached threshold (e.g. 250) -> meet Master Seller
+        // 3. Coordination for Handoff:
+        // A) If I am Supplier and I have >= threshold vouchers:
         if (Plugin.Cfg.MountRole == MountAutomationRole.Supplier)
         {
             if (voucherCount >= Plugin.Cfg.MountSupplierThreshold)
@@ -60,6 +61,23 @@ public sealed partial class AutoFate
                     session.PendingVoucherHandoffFromZone = zone;
                     return true;
                 }
+            }
+        }
+
+        // B) If I am MasterSeller and a Supplier is ready to deliver vouchers:
+        if (Plugin.Cfg.MountRole == MountAutomationRole.MasterSeller)
+        {
+            var partners = SharedAccountCoordinator.GetActivePartners(Plugin.Cfg.MountPartnerNames);
+            var readySupplier = partners.FirstOrDefault(p => p.Role == MountAutomationRole.Supplier &&
+                (p.IsReadyForTrade || p.VoucherCount >= Plugin.Cfg.MountSupplierThreshold));
+
+            if (readySupplier != null)
+            {
+                Diag($"MasterSeller detected Supplier '{readySupplier.CharacterName}' ready with {readySupplier.VoucherCount} vouchers; queueing trade meeting at Mor Dhona.");
+                session.PendingVoucherHandoff = true;
+                session.PendingVoucherHandoffPartner = readySupplier.CharacterName;
+                session.PendingVoucherHandoffFromZone = zone;
+                return true;
             }
         }
 
@@ -117,3 +135,4 @@ public sealed partial class AutoFate
         }
     }
 }
+

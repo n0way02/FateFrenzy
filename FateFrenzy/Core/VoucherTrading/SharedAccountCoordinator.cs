@@ -23,7 +23,7 @@ public sealed class SharedAccountState
     public DateTime LastUpdateUtc { get; set; } = DateTime.UtcNow;
 
     [JsonIgnore]
-    public bool IsAlive => (DateTime.UtcNow - LastUpdateUtc).TotalSeconds < 60;
+    public bool IsAlive => (DateTime.UtcNow - LastUpdateUtc).TotalSeconds < 90;
 }
 
 public static class SharedAccountCoordinator
@@ -31,13 +31,19 @@ public static class SharedAccountCoordinator
     private static readonly Lock SyncLock = new();
     private static DateTime lastWrittenUtc = DateTime.MinValue;
 
-    private static string SharedFilePath =>
-        Path.Combine(Plugin.PluginInterface.ConfigDirectory.FullName, "shared_voucher_accounts.json");
+    private static readonly string[] SharedDirectories =
+    [
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FateFrenzyShared"),
+        Path.Combine(Path.GetTempPath(), "FateFrenzyShared"),
+        Plugin.PluginInterface.ConfigDirectory.FullName
+    ];
+
+    public static string PrimarySharedFilePath =>
+        Path.Combine(SharedDirectories[0], "shared_voucher_accounts.json");
 
     public static unsafe void Heartbeat(bool isReadyForTrade = false)
     {
-        if (!Plugin.Cfg.MountAutomationEnabled) return;
-        if ((DateTime.UtcNow - lastWrittenUtc).TotalSeconds < 3 && !isReadyForTrade) return;
+        if ((DateTime.UtcNow - lastWrittenUtc).TotalSeconds < 2 && !isReadyForTrade) return;
 
         var player = Svc.Objects.LocalPlayer;
         if (player is null) return;
@@ -72,24 +78,40 @@ public static class SharedAccountCoordinator
     {
         lock (SyncLock)
         {
-            try
-            {
-                var file = SharedFilePath;
-                if (!File.Exists(file)) return [];
+            var dictionary = new Dictionary<string, SharedAccountState>(StringComparer.OrdinalIgnoreCase);
 
-                using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                using var sr = new StreamReader(fs);
-                var json = sr.ReadToEnd();
-                if (string.IsNullOrWhiteSpace(json)) return [];
-
-                var list = JsonConvert.DeserializeObject<List<SharedAccountState>>(json) ?? [];
-                return list.Where(s => s.IsAlive).ToList();
-            }
-            catch (Exception ex)
+            foreach (var dir in SharedDirectories)
             {
-                Svc.Log.Debug(ex, "[SharedAccountCoordinator] Failed to read shared states");
-                return [];
+                try
+                {
+                    var file = Path.Combine(dir, "shared_voucher_accounts.json");
+                    if (!File.Exists(file)) continue;
+
+                    using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var sr = new StreamReader(fs);
+                    var json = sr.ReadToEnd();
+                    if (string.IsNullOrWhiteSpace(json)) continue;
+
+                    var list = JsonConvert.DeserializeObject<List<SharedAccountState>>(json);
+                    if (list == null) continue;
+
+                    foreach (var state in list)
+                    {
+                        if (!state.IsAlive) continue;
+                        var key = $"{state.CharacterName}@{state.WorldId}";
+                        if (!dictionary.TryGetValue(key, out var existing) || state.LastUpdateUtc > existing.LastUpdateUtc)
+                        {
+                            dictionary[key] = state;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Svc.Log.Debug(ex, $"[SharedAccountCoordinator] Failed reading shared state from {dir}");
+                }
             }
+
+            return dictionary.Values.ToList();
         }
     }
 
@@ -97,32 +119,26 @@ public static class SharedAccountCoordinator
     {
         lock (SyncLock)
         {
-            for (var attempt = 0; attempt < 3; attempt++)
+            var all = ReadAllStates();
+            all.RemoveAll(x => x.CharacterName.Equals(state.CharacterName, StringComparison.OrdinalIgnoreCase)
+                            && x.WorldId == state.WorldId);
+            all.Add(state);
+
+            var json = JsonConvert.SerializeObject(all, Formatting.Indented);
+
+            foreach (var dir in SharedDirectories)
             {
                 try
                 {
-                    var file = SharedFilePath;
-                    var dir = Path.GetDirectoryName(file);
-                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    if (!Directory.Exists(dir))
                         Directory.CreateDirectory(dir);
 
-                    var all = ReadAllStates();
-                    all.RemoveAll(x => x.CharacterName.Equals(state.CharacterName, StringComparison.OrdinalIgnoreCase)
-                                    && x.WorldId == state.WorldId);
-                    all.Add(state);
-
-                    var json = JsonConvert.SerializeObject(all, Formatting.Indented);
+                    var file = Path.Combine(dir, "shared_voucher_accounts.json");
                     File.WriteAllText(file, json);
-                    return;
-                }
-                catch (IOException)
-                {
-                    Thread.Sleep(50);
                 }
                 catch (Exception ex)
                 {
-                    Svc.Log.Warning(ex, "[SharedAccountCoordinator] Failed to write shared state");
-                    return;
+                    Svc.Log.Debug(ex, $"[SharedAccountCoordinator] Failed writing shared state to {dir}");
                 }
             }
         }

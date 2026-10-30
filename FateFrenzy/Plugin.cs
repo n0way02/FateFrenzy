@@ -207,6 +207,8 @@ public sealed class Plugin : IDalamudPlugin
         }
         else // isLoggedIn is true
         {
+            FateFrenzy.Core.VoucherTrading.SharedAccountCoordinator.Heartbeat();
+
             if (Configuration.AutoResumeAfterDisconnect && Svc.Objects.LocalPlayer is not null && Controller.SessionSnapshot is null && !Controller.WasStoppedManually)
             {
                 if (!isAutoResumePending)

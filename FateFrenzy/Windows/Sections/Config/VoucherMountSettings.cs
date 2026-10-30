@@ -99,6 +99,8 @@ internal static class VoucherMountSettings
 
     private static unsafe void DrawPartnerStatusBox(Configuration cfg)
     {
+        SharedAccountCoordinator.Heartbeat();
+
         var im = InventoryManager.Instance();
         var myVouchers = im != null ? im->GetInventoryItemCount(cfg.MountTargetVoucherId, false, false, false) : 0;
         var myWhistle = im != null && im->GetInventoryItemCount(cfg.MountTargetItemId, false, false, false) > 0;
