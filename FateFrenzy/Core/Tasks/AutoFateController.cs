@@ -444,23 +444,23 @@ internal sealed partial class AutoFateController
                                 isPlugin = true,
                                 clientType = "FateFrenzy.Plugin",
                                 isIdleSync,
-                                version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "1.8.8.1",
+                                version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "1.8.8.2",
                                 serverName,
                                 currentServer,
-                                currentMap,
-                                territoryId,
-                                mapCode,
+                                currentMap = isIdleSync ? "Unknown" : currentMap,
+                                territoryId = isIdleSync ? 0u : territoryId,
+                                mapCode = isIdleSync ? "" : mapCode,
                                 sizeFactor,
                                 offsetX,
                                 offsetY,
-                                posX,
-                                posY,
-                                posZ,
-                                rotation,
+                                posX = isIdleSync ? (double?)null : posX,
+                                posY = isIdleSync ? (double?)null : posY,
+                                posZ = isIdleSync ? (double?)null : posZ,
+                                rotation = isIdleSync ? 0 : rotation,
                                 classJob,
                                 level,
-                                phase = Phase.ToString(),
-                                state = Status,
+                                phase = isIdleSync ? "Idle" : Phase.ToString(),
+                                state = isIdleSync ? "Idle" : Status,
                                 walletGemstones,
                                 gemstonesFarmed = activeSession?.GemstonesEarned ?? 0,
                                 fatesCompleted = activeSession?.CompletedCount ?? 0,
@@ -524,12 +524,52 @@ internal sealed partial class AutoFateController
             try { await Task.Delay(1000, token); } catch (TaskCanceledException) { return; }
 
             var isGpsWatched = false;
+            var wasActivelyRunning = false;
+            string? lastKnownPlayerName = null;
+            string? lastKnownServerName = null;
 
             while (!token.IsCancellationRequested)
             {
                 var activeSession = session;
-                var isActivelyRunning = clib.Services.Svc.Automation.Running && !Paused && activeSession is not null;
-                var gpsDelayMs = (isActivelyRunning || isGpsWatched) ? 1500 : 2500;
+                var isActivelyRunning = clib.Services.Svc.Automation.Running && !Paused && activeSession is not null && Phase != AutoPhase.Idle;
+                var gpsDelayMs = isActivelyRunning ? 1500 : 2500;
+
+                // Se o jogador acabou de parar o farm (clicou Stop), avisa o servidor para limpar a posição na hora
+                if (!isActivelyRunning)
+                {
+                    if (wasActivelyRunning && lastKnownPlayerName is not null && lastKnownServerName is not null)
+                    {
+                        wasActivelyRunning = false;
+                        try
+                        {
+                            var stopJson = JsonSerializer.Serialize(new
+                            {
+                                playerName = lastKnownPlayerName,
+                                serverName = lastKnownServerName,
+                                stopped = true,
+                                phase = "Idle",
+                                state = "Idle"
+                            });
+                            foreach (var endpoint in GpsEndpoints)
+                            {
+                                try
+                                {
+                                    using var sc = new System.Net.Http.StringContent(stopJson, System.Text.Encoding.UTF8, "application/json");
+                                    var r = await gpsClient.PostAsync(endpoint, sc, token);
+                                    if (r.IsSuccessStatusCode) break;
+                                }
+                                catch { }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    try { await Task.Delay(gpsDelayMs, token); }
+                    catch (OperationCanceledException) { break; }
+                    continue;
+                }
+
+                wasActivelyRunning = true;
 
                 try
                 {
@@ -642,6 +682,8 @@ internal sealed partial class AutoFateController
 
                     if (playerName is not null && serverName is not null)
                     {
+                        lastKnownPlayerName = playerName;
+                        lastKnownServerName = serverName;
                         var gpsPayload = new
                         {
                             playerName,
