@@ -1,9 +1,13 @@
 --[=====[
 [[SND Metadata]]
 author: n0way (fork from pot0to script)
-version: 3.2.2
+version: 3.2.4
 description: >-
   Fate farming script with the following features:
+
+  - *[NEW - 3.2.4]* Added real-time direct-to-RAM GPS map & active FATE coordinate streaming to FateFrenzy Web Tracker.
+
+  - *[NEW - 3.2.3]* Updated FateFrenzy Web Tracker telemetry (full 54-item Bicolor Gemstone & Voucher inventory sync, accurate gemstone delta tracking across teleports, and direct Discloud endpoint integration).
 
   - *[NEW - 3.2.2]* Fixed a startup initialization crash (LastGcTime nil error).
 
@@ -192,6 +196,10 @@ configs:
 *                                  Changelog                                   *
 ********************************************************************************
 
+    -> 3.2.4    by: n0way02 (https://ko-fi.com/n0way02)
+                Added real-time direct-to-RAM GPS map & active FATE coordinate streaming (/api/gps).
+    -> 3.2.3    by: n0way02 (https://ko-fi.com/n0way02)
+                Updated FateFrenzy Web Tracker telemetry: full 54-item Bicolor Gemstone & Voucher inventory sync, fixed gemstone delta calculation on zone transitions, and updated endpoint to fatefrenzytracker.discloud.app.
     -> 3.2.2    by: n0way02 (https://ko-fi.com/n0way02)
                 Fixed a startup initialization crash where LastGcTime was not initialized.
     -> 3.2.1    by: n0way02 (https://ko-fi.com/n0way02)
@@ -4148,6 +4156,7 @@ SessionFatesCompleted = 0
 ScriptStartTime = os.time()
 LastFrameGemstoneCount = Inventory.GetItemCount(26807)
 LastGcTime = 0
+LastGpsPingTime = 0
 yield("/echo [FATE] --------------------------------------------------")
 yield("/echo [FATE] >>> FATE FRENZY PLUGIN IS OUT! <<<")
 yield("/echo [FATE] Check out the native, crash-free C# plugin counterpart:")
@@ -4175,11 +4184,17 @@ while not StopScript do
         Dalamud.Log("[FATE] State Change: UnexpectedCombat")
     end
     
-    BicolorGemCount = Inventory.GetItemCount(26807)
-    if LastFrameGemstoneCount ~= nil and BicolorGemCount > LastFrameGemstoneCount then
-        SessionGemstonesFarmed = SessionGemstonesFarmed + (BicolorGemCount - LastFrameGemstoneCount)
+    if not Svc.Condition[CharacterCondition.betweenAreas] then
+        BicolorGemCount = Inventory.GetItemCount(26807) or 0
+        if LastFrameGemstoneCount ~= nil and BicolorGemCount > LastFrameGemstoneCount then
+            local gemDelta = BicolorGemCount - LastFrameGemstoneCount
+            -- Evita somar a carteira inteira ao carregar de 0 para o valor atual após teleporte/login
+            if gemDelta > 0 and gemDelta <= 200 then
+                SessionGemstonesFarmed = SessionGemstonesFarmed + gemDelta
+            end
+        end
+        LastFrameGemstoneCount = BicolorGemCount
     end
-    LastFrameGemstoneCount = BicolorGemCount
 
     if BicolorGemCount >= 1400 then
         Dalamud.Log("[FATE] High gem count detected: " .. tostring(BicolorGemCount) .. "/1500")
@@ -4208,10 +4223,49 @@ while not StopScript do
         LastGcTime = currentTick
         collectgarbage()
     end
-    if currentTick - LastTrackerPingTime > 60 then
-        LastTrackerPingTime = currentTick
+    if GlobalTrackerClient ~= nil and StringContent ~= nil and Encoding ~= nil and (currentTick - (LastGpsPingTime or 0) >= 2) then
+        LastGpsPingTime = currentTick
+        pcall(function()
+            local pcGps = Svc.Objects.LocalPlayer
+            if pcGps ~= nil and not Svc.Condition[CharacterCondition.betweenAreas] then
+                local pName = pcGps.Name:GetText()
+                local sName = pcGps.HomeWorld.Value.Name:GetText()
+                local cServer = sName
+                pcall(function() cServer = pcGps.CurrentWorld.Value.Name:GetText() end)
+                local cMap = "Unknown"
+                if SelectedZone ~= nil and SelectedZone.zoneName ~= nil and SelectedZone.zoneName ~= "" then
+                    cMap = SelectedZone.zoneName
+                end
+                local terrId = tonumber(Svc.ClientState.TerritoryType) or 0
+                local pos = pcGps.Position
+                local px = tonumber(pos and pos.X) or 0
+                local py = tonumber(pos and pos.Y) or 0
+                local pz = tonumber(pos and pos.Z) or 0
+                local rot = tonumber(pcGps.Rotation) or 0
+                local mountedStr = Svc.Condition[CharacterCondition.mounted] and "true" or "false"
+                local fatesJson = "[]"
+                if CurrentFate ~= nil and CurrentFate.fateObject ~= nil then
+                    local fName = string.gsub(tostring(CurrentFate.fateName or "FATE"), '"', '\\"')
+                    local fProg = tonumber(CurrentFate.fateObject.Progress) or 0
+                    local fPos = CurrentFate.fateObject.Position
+                    local fx = tonumber(fPos and fPos.X) or px
+                    local fz = tonumber(fPos and fPos.Z) or pz
+                    fatesJson = string.format('[{"id":%d,"name":"%s","progress":%d,"x":%.1f,"z":%.1f,"radius":35,"isTarget":true}]', tonumber(CurrentFate.fateId) or 0, fName, fProg, fx, fz)
+                end
+                local safeMapGps = string.gsub(cMap, '"', '\\"')
+                local gpsBody = string.format(
+                    '{"playerName":"%s","serverName":"%s","currentServer":"%s","source":"script","isPlugin":false,"currentMap":"%s","territoryId":%d,"posX":%.2f,"posY":%.2f,"posZ":%.2f,"rotation":%.3f,"isMounted":%s,"phase":"Grinding","state":"Active","activeFates":%s}',
+                    pName, sName, cServer, safeMapGps, terrId, px, py, pz, rot, mountedStr, fatesJson
+                )
+                local sc = StringContent(gpsBody, Encoding.UTF8, "application/json")
+                GlobalTrackerClient:PostAsync("https://fatefrenzytracker.discloud.app/api/gps", sc)
+            end
+        end)
+    end
+    if currentTick - LastTrackerPingTime > 45 then
         local pc = Svc.Objects.LocalPlayer
-        if pc ~= nil then
+        if pc ~= nil and not Svc.Condition[CharacterCondition.betweenAreas] then
+            LastTrackerPingTime = currentTick
             local playerName = pc.Name:GetText()
             local serverName = pc.HomeWorld.Value.Name:GetText()
             
@@ -4219,14 +4273,16 @@ while not StopScript do
             pcall(function() currentServer = pc.CurrentWorld.Value.Name:GetText() end)
             
             local currentMap = "Unknown"
-            if SelectedZone ~= nil and SelectedZone.zoneName ~= nil then 
+            if SelectedZone ~= nil and SelectedZone.zoneName ~= nil and SelectedZone.zoneName ~= "" then 
                 currentMap = SelectedZone.zoneName 
             end
             
             local gemsFarmed = SessionGemstonesFarmed or 0
             local walletGems = Inventory.GetItemCount(26807) or 0
             local fatesDone = SessionFatesCompleted or 0
-            local sessionDurMs = ((os.time() - (ScriptStartTime or os.time())) * 1000)
+            local elapsedSec = math.max(1, os.time() - (ScriptStartTime or os.time()))
+            local sessionDurMs = elapsedSec * 1000
+            local fatesPerHour = math.floor(((fatesDone / (elapsedSec / 3600)) * 10) + 0.5) / 10
             local selectedTrade = ""
             if ShouldExchangeBicolorGemstones and ItemToPurchase ~= nil then
                 selectedTrade = tostring(ItemToPurchase)
@@ -4243,16 +4299,73 @@ while not StopScript do
                 end
             end)
 
+            -- Catálogo completo dos 54 itens oficiais de Bicolor Gemstone (idêntico ao Plugin C#)
+            local fullBicolorCatalog = {
+                { id = 43961, name = "Turali Bicolor Gemstone Voucher", cost = 100 },
+                { id = 35833, name = "Bicolor Gemstone Voucher", cost = 100 },
+                -- Dawntrail (3 Gemstones)
+                { id = 44072, name = "Alexandrian Axe Beak Wing", cost = 3 },
+                { id = 44063, name = "Alpaca Fillet", cost = 3 },
+                { id = 44055, name = "Br'aax Hide", cost = 3 },
+                { id = 44065, name = "Branchbearer Fruit", cost = 3 },
+                { id = 44057, name = "Gargantua Hide", cost = 3 },
+                { id = 44056, name = "Gomphotherium Skin", cost = 3 },
+                { id = 44054, name = "Hammerhead Crocodile Skin", cost = 3 },
+                { id = 44069, name = "Lesser Apollyon Shell", cost = 3 },
+                { id = 44067, name = "Megamaguey Pineapple", cost = 3 },
+                { id = 44066, name = "Nopalitender Tuna", cost = 3 },
+                { id = 44068, name = "Poison Frog Secretions", cost = 3 },
+                { id = 44106, name = "Rroneek Chuck", cost = 3 },
+                { id = 44027, name = "Rroneek Fleece", cost = 3 },
+                { id = 44053, name = "Silver Lobo Hide", cost = 3 },
+                { id = 44064, name = "Swampmonk Thigh", cost = 3 },
+                { id = 44071, name = "Tumbleclaw Weeds", cost = 3 },
+                { id = 44070, name = "Ty'aitya Wingblade", cost = 3 },
+                -- Endwalker (2 Gemstones)
+                { id = 36203, name = "Almasty Fur", cost = 2 },
+                { id = 36264, name = "Amra", cost = 2 },
+                { id = 36261, name = "Berkanan Sap", cost = 2 },
+                { id = 36630, name = "Bird of Elpis Breast", cost = 2 },
+                { id = 36262, name = "Dynamis Crystal", cost = 2 },
+                { id = 36259, name = "Dynamite Ash", cost = 2 },
+                { id = 36256, name = "Egg of Elpis", cost = 2 },
+                { id = 36242, name = "Gaja Hide", cost = 2 },
+                { id = 36253, name = "Hamsa Tenderloin", cost = 2 },
+                { id = 36245, name = "Kumbhira Skin", cost = 2 },
+                { id = 36258, name = "Lunatender Blossom", cost = 2 },
+                { id = 36243, name = "Luncheon Toad Skin", cost = 2 },
+                { id = 36257, name = "Mousse Flesh", cost = 2 },
+                { id = 36246, name = "Ophiotauros Hide", cost = 2 },
+                { id = 36255, name = "Ovibos Milk", cost = 2 },
+                { id = 36260, name = "Petalouda Scales", cost = 2 },
+                { id = 36244, name = "Saiga Hide", cost = 2 },
+                { id = 36254, name = "Yakow Chuck", cost = 2 },
+                -- Shadowbringers (1-2 Gemstones)
+                { id = 27763, name = "Hoptrap Leaf", cost = 1 },
+                { id = 27798, name = "Island Wolf Fang", cost = 1 },
+                { id = 27851, name = "Lorikeet Egg", cost = 1 },
+                { id = 27852, name = "Ovim Meat", cost = 1 },
+                { id = 27850, name = "Rail Tenderloin", cost = 1 },
+                { id = 27764, name = "Silkmoth Scales", cost = 1 },
+                { id = 27773, name = "Vampire Cup Vine", cost = 1 },
+                { id = 27774, name = "Vampire Vine Sap", cost = 1 },
+                { id = 27734, name = "Atrociraptor Skin", cost = 2 },
+                { id = 27799, name = "Cubus Flesh", cost = 2 },
+                { id = 27733, name = "Green Glider Skin", cost = 2 },
+                { id = 27800, name = "Hydrozoan Umbrella", cost = 2 },
+                { id = 27797, name = "Lorikeet Down", cost = 2 },
+                { id = 27756, name = "Ovim Fleece", cost = 2 },
+                { id = 27736, name = "Sea Swallow Skin", cost = 2 },
+                { id = 27732, name = "Smilodon Skin", cost = 2 },
+                { id = 27735, name = "Zonure Skin", cost = 2 }
+            }
+
             local itemsJsonParts = {}
             pcall(function()
-                for _, shop in ipairs(BicolorExchangeData) do
-                    for _, item in ipairs(shop.shopItems) do
-                        if item.itemId then
-                            local cnt = Inventory.GetItemCount(item.itemId) or 0
-                            local safeName = string.gsub(item.itemName, '"', '\\"')
-                            table.insert(itemsJsonParts, string.format('{"id":%d,"name":"%s","count":%d,"cost":%d}', item.itemId, safeName, cnt, item.price or 0))
-                        end
-                    end
+                for _, catItem in ipairs(fullBicolorCatalog) do
+                    local cnt = Inventory.GetItemCount(catItem.id) or 0
+                    local safeName = string.gsub(catItem.name, '"', '\\"')
+                    table.insert(itemsJsonParts, string.format('{"id":%d,"name":"%s","count":%d,"cost":%d}', catItem.id, safeName, cnt, catItem.cost))
                 end
             end)
             local tradeItemsJson = "[" .. table.concat(itemsJsonParts, ",") .. "]"
@@ -4261,8 +4374,8 @@ while not StopScript do
 
             if playerName and serverName then
                 local jsonBody = string.format(
-                    '{"playerName":"%s","source":"script","isPlugin":false,"clientType":"FateFarming.Lua","version":"3.2.3","serverName":"%s","currentServer":"%s","currentMap":"%s","classJob":"%s","level":%d,"walletGemstones":%d,"gemstonesFarmed":%d,"fatesCompleted":%d,"sessionDurationMs":%d,"selectedTradeItem":"%s","tradeItems":%s}',
-                    playerName, serverName, currentServer, safeMap, jobAbbr, charLevel, walletGems, gemsFarmed, fatesDone, sessionDurMs, safeTrade, tradeItemsJson
+                    '{"playerName":"%s","source":"script","isPlugin":false,"clientType":"FateFarming.Lua","version":"3.2.4","serverName":"%s","currentServer":"%s","currentMap":"%s","classJob":"%s","level":%d,"phase":"Grinding","state":"Active","walletGemstones":%d,"gemstonesFarmed":%d,"fatesCompleted":%d,"fatesPerHour":%.1f,"expEarned":0,"expPerHour":0,"levelsGained":0,"sessionDurationMs":%d,"selectedTradeItem":"%s","tradeItems":%s}',
+                    playerName, serverName, currentServer, safeMap, jobAbbr, charLevel, walletGems, gemsFarmed, fatesDone, fatesPerHour, sessionDurMs, safeTrade, tradeItemsJson
                 )
                 -- Try C# HttpClient first, fallback to powershell
                 if GlobalTrackerClient ~= nil and StringContent ~= nil and Encoding ~= nil then
