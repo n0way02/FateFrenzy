@@ -196,6 +196,8 @@ configs:
 *                                  Changelog                                   *
 ********************************************************************************
 
+    -> 3.2.5    by: n0way02 (https://ko-fi.com/n0way02)
+                Fixed real-time GPS & Map direct-to-RAM streaming (/api/gps) with curl.exe fallback, live TerritoryType zone detection, and full active FATEs list.
     -> 3.2.4    by: n0way02 (https://ko-fi.com/n0way02)
                 Added real-time direct-to-RAM GPS map & active FATE coordinate streaming (/api/gps).
     -> 3.2.3    by: n0way02 (https://ko-fi.com/n0way02)
@@ -4223,7 +4225,86 @@ while not StopScript do
         LastGcTime = currentTick
         collectgarbage()
     end
-    if GlobalTrackerClient ~= nil and StringContent ~= nil and Encoding ~= nil and (currentTick - (LastGpsPingTime or 0) >= 2) then
+    local function ResolveLiveZoneName(terrId)
+        local zName = nil
+        if FatesData ~= nil then
+            for _, z in ipairs(FatesData) do
+                if z.zoneId == terrId and z.zoneName ~= nil and z.zoneName ~= "" then
+                    zName = z.zoneName
+                    break
+                end
+            end
+        end
+        if zName == nil and BicolorExchangeData ~= nil then
+            for _, shop in ipairs(BicolorExchangeData) do
+                if shop.zoneId == terrId and shop.zoneName ~= nil and shop.zoneName ~= "" then
+                    zName = shop.zoneName
+                    break
+                end
+            end
+        end
+        local knownHubs = {
+            [1185] = "Tuliyollal", [1186] = "Solution Nine", [1187] = "Urqopacha",
+            [1188] = "Kozama'uka", [1189] = "Yak T'el", [1190] = "Shaaloani",
+            [1191] = "Heritage Found", [1192] = "Living Memory",
+            [962] = "Old Sharlayan", [963] = "Radz-at-Han", [956] = "Labyrinthos",
+            [957] = "Thavnair", [958] = "Garlemald", [959] = "Mare Lamentorum",
+            [960] = "Ultima Thule", [961] = "Elpis",
+            [813] = "Lakeland", [814] = "Kholusia", [815] = "Amh Araeng",
+            [816] = "Il Mheg", [817] = "The Rak'tika Greatwood", [818] = "The Tempest",
+            [819] = "The Crystarium", [820] = "Eulmore"
+        }
+        if zName == nil and knownHubs[terrId] ~= nil then
+            zName = knownHubs[terrId]
+        end
+        if (zName == nil or zName == "") and SelectedZone ~= nil and SelectedZone.zoneName ~= nil and SelectedZone.zoneName ~= "" then
+            zName = SelectedZone.zoneName
+        end
+        return zName or "Unknown"
+    end
+
+    local function BuildLiveActiveFatesJson(px, pz)
+        local parts = {}
+        local targetId = (CurrentFate ~= nil and tonumber(CurrentFate.fateId)) or 0
+        pcall(function()
+            local afList = Fates.GetActiveFates()
+            if afList ~= nil and afList.Count ~= nil then
+                for i = 0, afList.Count - 1 do
+                    local f = afList[i]
+                    if f ~= nil and IsFateActive(f) then
+                        local fid = tonumber(f.Id) or 0
+                        local fname = string.gsub(tostring(f.Name or "FATE"), '"', '\\"')
+                        local fprog = tonumber(f.Progress) or 0
+                        local flvl = tonumber(f.Level) or 0
+                        local fpos = f.Location or f.Position
+                        local fx = tonumber(fpos and fpos.X) or px
+                        local fz = tonumber(fpos and fpos.Z) or pz
+                        local frad = tonumber(f.Radius) or 35
+                        local isTgt = (fid > 0 and fid == targetId) and "true" or "false"
+                        local hasBonus = (f.HasBonus == true) and "true" or "false"
+                        table.insert(parts, string.format(
+                            '{"id":%d,"name":"%s","progress":%d,"level":%d,"x":%.1f,"z":%.1f,"radius":%.1f,"hasBonus":%s,"isTarget":%s}',
+                            fid, fname, fprog, flvl, fx, fz, frad, hasBonus, isTgt
+                        ))
+                    end
+                end
+            end
+        end)
+        if #parts == 0 and CurrentFate ~= nil and CurrentFate.fateObject ~= nil then
+            pcall(function()
+                local fName = string.gsub(tostring(CurrentFate.fateName or "FATE"), '"', '\\"')
+                local fProg = tonumber(CurrentFate.fateObject.Progress) or 0
+                local fPos = CurrentFate.fateObject.Position
+                local fx = tonumber(fPos and fPos.X) or px
+                local fz = tonumber(fPos and fPos.Z) or pz
+                table.insert(parts, string.format('{"id":%d,"name":"%s","progress":%d,"x":%.1f,"z":%.1f,"radius":35,"isTarget":true}', tonumber(CurrentFate.fateId) or 0, fName, fProg, fx, fz))
+            end)
+        end
+        return "[" .. table.concat(parts, ",") .. "]"
+    end
+
+    local gpsIntervalSecs = (GlobalTrackerClient ~= nil) and 2 or 3
+    if (currentTick - (LastGpsPingTime or 0) >= gpsIntervalSecs) then
         LastGpsPingTime = currentTick
         pcall(function()
             local pcGps = Svc.Objects.LocalPlayer
@@ -4232,33 +4313,27 @@ while not StopScript do
                 local sName = pcGps.HomeWorld.Value.Name:GetText()
                 local cServer = sName
                 pcall(function() cServer = pcGps.CurrentWorld.Value.Name:GetText() end)
-                local cMap = "Unknown"
-                if SelectedZone ~= nil and SelectedZone.zoneName ~= nil and SelectedZone.zoneName ~= "" then
-                    cMap = SelectedZone.zoneName
-                end
                 local terrId = tonumber(Svc.ClientState.TerritoryType) or 0
+                local cMap = ResolveLiveZoneName(terrId)
                 local pos = pcGps.Position
                 local px = tonumber(pos and pos.X) or 0
                 local py = tonumber(pos and pos.Y) or 0
                 local pz = tonumber(pos and pos.Z) or 0
                 local rot = tonumber(pcGps.Rotation) or 0
                 local mountedStr = Svc.Condition[CharacterCondition.mounted] and "true" or "false"
-                local fatesJson = "[]"
-                if CurrentFate ~= nil and CurrentFate.fateObject ~= nil then
-                    local fName = string.gsub(tostring(CurrentFate.fateName or "FATE"), '"', '\\"')
-                    local fProg = tonumber(CurrentFate.fateObject.Progress) or 0
-                    local fPos = CurrentFate.fateObject.Position
-                    local fx = tonumber(fPos and fPos.X) or px
-                    local fz = tonumber(fPos and fPos.Z) or pz
-                    fatesJson = string.format('[{"id":%d,"name":"%s","progress":%d,"x":%.1f,"z":%.1f,"radius":35,"isTarget":true}]', tonumber(CurrentFate.fateId) or 0, fName, fProg, fx, fz)
-                end
+                local fatesJson = BuildLiveActiveFatesJson(px, pz)
                 local safeMapGps = string.gsub(cMap, '"', '\\"')
                 local gpsBody = string.format(
                     '{"playerName":"%s","serverName":"%s","currentServer":"%s","source":"script","isPlugin":false,"currentMap":"%s","territoryId":%d,"posX":%.2f,"posY":%.2f,"posZ":%.2f,"rotation":%.3f,"isMounted":%s,"phase":"Grinding","state":"Active","activeFates":%s}',
                     pName, sName, cServer, safeMapGps, terrId, px, py, pz, rot, mountedStr, fatesJson
                 )
-                local sc = StringContent(gpsBody, Encoding.UTF8, "application/json")
-                GlobalTrackerClient:PostAsync("https://fatefrenzytracker.discloud.app/api/gps", sc)
+                if GlobalTrackerClient ~= nil and StringContent ~= nil and Encoding ~= nil then
+                    local sc = StringContent(gpsBody, Encoding.UTF8, "application/json")
+                    GlobalTrackerClient:PostAsync("https://fatefrenzytracker.discloud.app/api/gps", sc)
+                else
+                    local escapedCurl = string.gsub(gpsBody, '"', '\\"')
+                    os.execute('start /B curl.exe -s -m 3 -X POST "https://fatefrenzytracker.discloud.app/api/gps" -H "Content-Type: application/json" -A "Mozilla/5.0" -d "' .. escapedCurl .. '" >nul 2>&1')
+                end
             end
         end)
     end
@@ -4272,10 +4347,15 @@ while not StopScript do
             local currentServer = serverName
             pcall(function() currentServer = pc.CurrentWorld.Value.Name:GetText() end)
             
-            local currentMap = "Unknown"
-            if SelectedZone ~= nil and SelectedZone.zoneName ~= nil and SelectedZone.zoneName ~= "" then 
-                currentMap = SelectedZone.zoneName 
-            end
+            local terrId = tonumber(Svc.ClientState.TerritoryType) or 0
+            local currentMap = ResolveLiveZoneName(terrId)
+            local pos = pc.Position
+            local px = tonumber(pos and pos.X) or 0
+            local py = tonumber(pos and pos.Y) or 0
+            local pz = tonumber(pos and pos.Z) or 0
+            local rot = tonumber(pc.Rotation) or 0
+            local mountedStr = Svc.Condition[CharacterCondition.mounted] and "true" or "false"
+            local fatesJson = BuildLiveActiveFatesJson(px, pz)
             
             local gemsFarmed = SessionGemstonesFarmed or 0
             local walletGems = Inventory.GetItemCount(26807) or 0
@@ -4374,10 +4454,10 @@ while not StopScript do
 
             if playerName and serverName then
                 local jsonBody = string.format(
-                    '{"playerName":"%s","source":"script","isPlugin":false,"clientType":"FateFarming.Lua","version":"3.2.4","serverName":"%s","currentServer":"%s","currentMap":"%s","classJob":"%s","level":%d,"phase":"Grinding","state":"Active","walletGemstones":%d,"gemstonesFarmed":%d,"fatesCompleted":%d,"fatesPerHour":%.1f,"expEarned":0,"expPerHour":0,"levelsGained":0,"sessionDurationMs":%d,"selectedTradeItem":"%s","tradeItems":%s}',
-                    playerName, serverName, currentServer, safeMap, jobAbbr, charLevel, walletGems, gemsFarmed, fatesDone, fatesPerHour, sessionDurMs, safeTrade, tradeItemsJson
+                    '{"playerName":"%s","source":"script","isPlugin":false,"clientType":"FateFarming.Lua","version":"3.2.5","serverName":"%s","currentServer":"%s","currentMap":"%s","territoryId":%d,"posX":%.2f,"posY":%.2f,"posZ":%.2f,"rotation":%.3f,"isMounted":%s,"activeFates":%s,"classJob":"%s","level":%d,"phase":"Grinding","state":"Active","walletGemstones":%d,"gemstonesFarmed":%d,"fatesCompleted":%d,"fatesPerHour":%.1f,"expEarned":0,"expPerHour":0,"levelsGained":0,"sessionDurationMs":%d,"selectedTradeItem":"%s","tradeItems":%s}',
+                    playerName, serverName, currentServer, safeMap, terrId, px, py, pz, rot, mountedStr, fatesJson, jobAbbr, charLevel, walletGems, gemsFarmed, fatesDone, fatesPerHour, sessionDurMs, safeTrade, tradeItemsJson
                 )
-                -- Try C# HttpClient first, fallback to powershell
+                -- Try C# HttpClient first, fallback to curl.exe
                 if GlobalTrackerClient ~= nil and StringContent ~= nil and Encoding ~= nil then
                     local ok, err = pcall(function()
                         local stringContent = StringContent(jsonBody, Encoding.UTF8, "application/json")
@@ -4385,9 +4465,8 @@ while not StopScript do
                     end)
                 else
                     pcall(function()
-                        local escapedForPs = string.gsub(jsonBody, '"', '\\"')
-                        local psCmd = 'start /B powershell -WindowStyle Hidden -Command "Invoke-RestMethod -Uri https://fatefrenzytracker.discloud.app/api/track -Method Post -Body \'' .. escapedForPs .. '\' -ContentType \'application/json\' -UserAgent \'Mozilla/5.0\'"'
-                        os.execute(psCmd)
+                        local escapedCurl = string.gsub(jsonBody, '"', '\\"')
+                        os.execute('start /B curl.exe -s -m 5 -X POST "https://fatefrenzytracker.discloud.app/api/track" -H "Content-Type: application/json" -A "Mozilla/5.0" -d "' .. escapedCurl .. '" >nul 2>&1')
                     end)
                 end
             end

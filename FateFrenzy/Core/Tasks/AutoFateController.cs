@@ -444,7 +444,7 @@ internal sealed partial class AutoFateController
                                 isPlugin = true,
                                 clientType = "FateFrenzy.Plugin",
                                 isIdleSync,
-                                version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "1.8.8.0",
+                                version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "1.8.8.1",
                                 serverName,
                                 currentServer,
                                 currentMap,
@@ -521,7 +521,7 @@ internal sealed partial class AutoFateController
             var gpsClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
             gpsClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
-            try { await Task.Delay(2500, token); } catch (TaskCanceledException) { return; }
+            try { await Task.Delay(1000, token); } catch (TaskCanceledException) { return; }
 
             var isGpsWatched = false;
 
@@ -529,7 +529,7 @@ internal sealed partial class AutoFateController
             {
                 var activeSession = session;
                 var isActivelyRunning = clib.Services.Svc.Automation.Running && !Paused && activeSession is not null;
-                var gpsDelayMs = (isActivelyRunning || isGpsWatched) ? 1500 : 6000;
+                var gpsDelayMs = (isActivelyRunning || isGpsWatched) ? 1500 : 2500;
 
                 try
                 {
