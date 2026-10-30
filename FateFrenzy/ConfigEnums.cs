@@ -60,3 +60,10 @@ public enum FateSortCriterion
     Level,
     Name,
 }
+
+public enum MountAutomationRole
+{
+    Solo,
+    Supplier,
+    MasterSeller,
+}

@@ -11,7 +11,7 @@ namespace FateFrenzy.Windows;
 
 public sealed class ConfigWindow : Window, IDisposable
 {
-    private enum Tab { General, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert }
+    private enum Tab { General, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert, Vouchers }
 
     private readonly Plugin plugin;
     private Tab activeTab = Tab.General;
@@ -58,6 +58,7 @@ public sealed class ConfigWindow : Window, IDisposable
         if (SidebarTab.Draw("Humanizer",    FontAwesomeIcon.Walking,    Styling.AccentViolet, activeTab == Tab.Humanize))  activeTab = Tab.Humanize;
         if (SidebarTab.Draw("Party invites", FontAwesomeIcon.UserSlash, Styling.AccentViolet, activeTab == Tab.PartyInvites)) activeTab = Tab.PartyInvites;
         if (SidebarTab.Draw("GM alert",     FontAwesomeIcon.UserSecret, Styling.AccentViolet, activeTab == Tab.GmAlert))   activeTab = Tab.GmAlert;
+        if (SidebarTab.Draw("Voucher & Mount", FontAwesomeIcon.Store,   Styling.AccentViolet, activeTab == Tab.Vouchers))  activeTab = Tab.Vouchers;
     }
 
     private void DrawContent(Configuration cfg)
@@ -74,6 +75,7 @@ public sealed class ConfigWindow : Window, IDisposable
             case Tab.Humanize:  DrawHeader("Humanizer", "Take periodic city breaks between FATEs — teleport to a random hub and wander around for a few minutes before resuming."); HumanizerSettings.Draw(cfg); break;
             case Tab.PartyInvites: DrawHeader("Party invites", "Auto-decline incoming party invites during a run, after a human-like delay, with an optional reply."); PartyInviteSettings.Draw(cfg); break;
             case Tab.GmAlert:   DrawHeader("GM alert",  "Detects nearby Game Masters and reacts — stop the bot, ping you, or take more drastic action.");  GmAlertSettings.Draw(cfg); break;
+            case Tab.Vouchers:  DrawHeader("Voucher & Mount", "Multi-account voucher exchange, mount buying, and Retainer Market Board seller."); VoucherMountSettings.Draw(cfg); break;
         }
     }
 

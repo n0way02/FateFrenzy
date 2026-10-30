@@ -138,6 +138,21 @@ public sealed class Configuration : IPluginConfiguration
     // When true, TextAdvance state is left untouched on stop.
     public bool KeepTextAdvanceOnStop { get; set; } = false;
 
+    // Mount Auto-Exchange & Retainer Market Seller
+    public bool MountAutomationEnabled { get; set; } = false;
+    public MountAutomationRole MountRole { get; set; } = MountAutomationRole.Solo;
+    public uint MountTargetVoucherId { get; set; } = 43961; // Turali Bicolor Gemstone Voucher
+    public uint MountTargetItemId { get; set; } = 43590; // Ty'aitya Whistle
+    public int MountSupplierThreshold { get; set; } = 250;
+    public int MountBuyerThreshold { get; set; } = 500;
+    public string MountPartnerNames { get; set; } = "";
+    public long MountInitialPrice { get; set; } = 65000000;
+    public long MountFloorPrice { get; set; } = 50000000;
+    public long MountUndercutAmount { get; set; } = 1;
+    public int MountUndercutCheckIntervalMinutes { get; set; } = 30;
+    public int MountRetainerIndex { get; set; } = 0;
+    public bool MountUsePrivateInn { get; set; } = true;
+
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
 
     public void SaveDebounced()

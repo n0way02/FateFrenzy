@@ -297,6 +297,8 @@ public sealed partial class AutoFate
                 if (TryQueueTrade()) return ExitReason.Quit;
             }
 
+            if (TryQueueMountAutomation()) return ExitReason.Quit;
+
             if (Plugin.Cfg.HumanizerEnabled
              && Plugin.Cfg.HumanizerCities.Count > 0
              && session.FatesSinceLastBreak >= Math.Max(1, Plugin.Cfg.HumanizerFatesBeforeBreak))

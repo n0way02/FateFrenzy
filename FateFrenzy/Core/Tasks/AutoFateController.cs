@@ -755,4 +755,4 @@ internal sealed partial class AutoFateController
 
 }
 
-internal enum AutoPhase { Idle, Grinding, Trading, Repairing, Humanizing, Finishing, Paused }
+internal enum AutoPhase { Idle, Grinding, Trading, Repairing, Humanizing, Finishing, Paused, MountExchanging, RetainerSelling, VoucherTrading }

@@ -207,6 +207,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                 {
                     if (TryQueueTrade()) return;
                 }
+
+                if (TryQueueMountAutomation()) return;
             }
 
             var state = ComputeState();

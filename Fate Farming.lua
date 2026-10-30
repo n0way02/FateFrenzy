@@ -1,9 +1,11 @@
 --[=====[
 [[SND Metadata]]
 author: n0way (fork from pot0to script)
-version: 3.2.4
+version: 3.2.5
 description: >-
   Fate farming script with the following features:
+
+  - *[NEW - 3.2.5]* Fixed real-time GPS & Map direct-to-RAM streaming (/api/gps) with curl.exe fallback, live TerritoryType zone detection, and full active FATEs list.
 
   - *[NEW - 3.2.4]* Added real-time direct-to-RAM GPS map & active FATE coordinate streaming to FateFrenzy Web Tracker.
 

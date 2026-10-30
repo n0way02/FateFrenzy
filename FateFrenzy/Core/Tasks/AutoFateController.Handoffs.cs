@@ -53,15 +53,80 @@ internal sealed partial class AutoFateController
             return;
         }
 
+        if (owningSession.PendingMountExchange)
+        {
+            owningSession.PendingMountExchange = false;
+            Phase = AutoPhase.MountExchanging;
+            Diag("Mount Exchange phase entering.");
+            RunTask(new AutoMountExchange(), () =>
+            {
+                if (owningSession != session)
+                {
+                    Diag("AutoMountExchange finished: owning session is stale; not resuming.");
+                    EndRun(owningSession);
+                    return;
+                }
+                HandlePostFateHandoffs(owningSession);
+            });
+            return;
+        }
+
+        if (owningSession.PendingRetainerSell)
+        {
+            owningSession.PendingRetainerSell = false;
+            var isUndercut = owningSession.PendingRetainerUndercutOnly;
+            owningSession.PendingRetainerUndercutOnly = false;
+            Phase = AutoPhase.RetainerSelling;
+            Diag($"Retainer Selling phase entering (undercutOnly={isUndercut}).");
+            RunTask(new AutoRetainerSell(isUndercut), () =>
+            {
+                if (owningSession != session)
+                {
+                    Diag("AutoRetainerSell finished: owning session is stale; not resuming.");
+                    EndRun(owningSession);
+                    return;
+                }
+                HandlePostFateHandoffs(owningSession);
+            });
+            return;
+        }
+
+        if (owningSession.PendingVoucherHandoff)
+        {
+            owningSession.PendingVoucherHandoff = false;
+            Phase = AutoPhase.VoucherTrading;
+            Diag($"Voucher Trading phase entering with partner '{owningSession.PendingVoucherHandoffPartner}'.");
+            RunTask(new AutoVoucherHandoff(owningSession.PendingVoucherHandoffPartner), () =>
+            {
+                if (owningSession != session)
+                {
+                    Diag("AutoVoucherHandoff finished: owning session is stale; not resuming.");
+                    EndRun(owningSession);
+                    return;
+                }
+                HandlePostFateHandoffs(owningSession);
+            });
+            return;
+        }
+
         if (owningSession.PendingTradeFromZone is not { } origin)
         {
             // No more hand-offs; either we never queued one (stop condition / error), or we just
-            // finished the trade phase. Resume the FATE grind if we ended on repair-only.
-            if (Phase == AutoPhase.Repairing && activeZones.Count > 0)
+            // finished the trade phase. Resume the FATE grind if we ended on repair/mount/retainer/voucher.
+            if ((Phase == AutoPhase.Repairing || Phase == AutoPhase.MountExchanging || Phase == AutoPhase.RetainerSelling || Phase == AutoPhase.VoucherTrading) && activeZones.Count > 0)
             {
-                var resumeIndex = ResumeIndexFor(owningSession.PendingRepairFromZone);
+                var resumeZone = owningSession.PendingMountExchangeFromZone
+                    ?? owningSession.PendingRetainerSellFromZone
+                    ?? owningSession.PendingVoucherHandoffFromZone
+                    ?? owningSession.PendingRepairFromZone;
+
+                owningSession.PendingMountExchangeFromZone = null;
+                owningSession.PendingRetainerSellFromZone = null;
+                owningSession.PendingVoucherHandoffFromZone = null;
                 owningSession.PendingRepairFromZone = null;
-                Diag($"Repair finished with no pending trade; resuming FATE grind at {activeZones[resumeIndex].Name}.");
+
+                var resumeIndex = ResumeIndexFor(resumeZone);
+                Diag($"Handoff finished with no pending trade; resuming FATE grind at {activeZones[resumeIndex].Name}.");
                 ResumeGrindOrHumanize(owningSession, resumeIndex);
                 return;
             }

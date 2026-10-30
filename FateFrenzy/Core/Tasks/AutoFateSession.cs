@@ -93,6 +93,15 @@ public sealed class AutoFateSession
     public bool PendingHumanize;
     public ZoneInfo? PendingHumanizeFromZone;
 
+    public bool PendingMountExchange;
+    public ZoneInfo? PendingMountExchangeFromZone;
+    public bool PendingVoucherHandoff;
+    public string PendingVoucherHandoffPartner = string.Empty;
+    public ZoneInfo? PendingVoucherHandoffFromZone;
+    public bool PendingRetainerSell;
+    public bool PendingRetainerUndercutOnly;
+    public ZoneInfo? PendingRetainerSellFromZone;
+
     public readonly HashSet<uint> UnreachableZoneIds = [];
 
     public bool EndedWithFault;
