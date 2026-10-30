@@ -169,6 +169,11 @@ internal sealed partial class AutoFateController
         "https://fatefrenzytracker.discloud.app/api/track"
     ];
 
+    private static readonly string[] GpsEndpoints =
+    [
+        "https://fatefrenzytracker.discloud.app/api/gps"
+    ];
+
     // Catálogo garantido dos 54 itens oficiais de Bicolor Gemstone (incluindo os 2 Vouchers)
     // para que o inventário seja lido mesmo antes ou independentemente do cache do Lumina.
     private static readonly (uint Id, string Name, uint Cost)[] GuaranteedBicolorItems =
@@ -300,6 +305,15 @@ internal sealed partial class AutoFateController
                         string? serverName = null;
                         string? currentServer = null;
                         string? currentMap = null;
+                        uint territoryId = 0;
+                        string mapCode = "";
+                        int sizeFactor = 100;
+                        int offsetX = 0;
+                        int offsetY = 0;
+                        double posX = 0;
+                        double posY = 0;
+                        double posZ = 0;
+                        double rotation = 0;
                         string classJob = "";
                         int level = 0;
                         int walletGemstones = 0;
@@ -320,8 +334,26 @@ internal sealed partial class AutoFateController
                                     currentServer = pc.CurrentWorld.Value.Name.ToString();
                                     classJob = pc.ClassJob.Value.Abbreviation.ToString();
                                     level = pc.Level;
+                                    posX = Math.Round(pc.Position.X, 2);
+                                    posY = Math.Round(pc.Position.Y, 2);
+                                    posZ = Math.Round(pc.Position.Z, 2);
+                                    rotation = Math.Round(pc.Rotation, 3);
 
                                     var currentTerritory = Svc.ClientState.TerritoryType;
+                                    territoryId = currentTerritory;
+                                    var terrRow = ECommons.DalamudServices.Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>()?.GetRowOrDefault(currentTerritory);
+                                    if (terrRow is { } tr)
+                                    {
+                                        var mapRow = tr.Map.ValueNullable;
+                                        if (mapRow is { } mr)
+                                        {
+                                            mapCode = mr.Id.ExtractText();
+                                            sizeFactor = mr.SizeFactor > 0 ? mr.SizeFactor : 100;
+                                            offsetX = mr.OffsetX;
+                                            offsetY = mr.OffsetY;
+                                        }
+                                    }
+
                                     var currentZone = ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == currentTerritory);
                                     if (currentZone is not null)
                                     {
@@ -329,7 +361,6 @@ internal sealed partial class AutoFateController
                                     }
                                     else
                                     {
-                                        var terrRow = ECommons.DalamudServices.Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>()?.GetRowOrDefault(currentTerritory);
                                         var placeName = terrRow?.PlaceName.ValueNullable?.Name.ExtractText();
                                         currentMap = !string.IsNullOrWhiteSpace(placeName)
                                             ? placeName
@@ -413,10 +444,19 @@ internal sealed partial class AutoFateController
                                 isPlugin = true,
                                 clientType = "FateFrenzy.Plugin",
                                 isIdleSync,
-                                version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "1.8.7.0",
+                                version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "1.8.8.0",
                                 serverName,
                                 currentServer,
                                 currentMap,
+                                territoryId,
+                                mapCode,
+                                sizeFactor,
+                                offsetX,
+                                offsetY,
+                                posX,
+                                posY,
+                                posZ,
+                                rotation,
                                 classJob,
                                 level,
                                 phase = Phase.ToString(),
@@ -467,6 +507,195 @@ internal sealed partial class AutoFateController
                 try
                 {
                     await telemetryWakeSignal.WaitAsync(nextDelayMs, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }, token);
+
+        // Worker dedicado de GPS em Tempo Real (Direto para a memória RAM do site, sem usar banco de dados)
+        Task.Run(async () =>
+        {
+            var gpsClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            gpsClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+
+            try { await Task.Delay(2500, token); } catch (TaskCanceledException) { return; }
+
+            var isGpsWatched = false;
+
+            while (!token.IsCancellationRequested)
+            {
+                var activeSession = session;
+                var isActivelyRunning = clib.Services.Svc.Automation.Running && !Paused && activeSession is not null;
+                var gpsDelayMs = (isActivelyRunning || isGpsWatched) ? 1500 : 6000;
+
+                try
+                {
+                    string? playerName = null;
+                    string? serverName = null;
+                    string? currentServer = null;
+                    string? currentMap = null;
+                    uint territoryId = 0;
+                    string mapCode = "";
+                    int sizeFactor = 100;
+                    int offsetX = 0;
+                    int offsetY = 0;
+                    double posX = 0;
+                    double posY = 0;
+                    double posZ = 0;
+                    double rotation = 0;
+                    bool isMounted = false;
+                    string classJob = "";
+                    int level = 0;
+                    List<object> activeFates = [];
+
+                    var tcs = new TaskCompletionSource<bool>();
+                    _ = Svc.Framework.RunOnFrameworkThread(() =>
+                    {
+                        try
+                        {
+                            var pc = Svc.Objects.LocalPlayer;
+                            if (pc is not null && !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas])
+                            {
+                                playerName = pc.Name.ToString();
+                                serverName = pc.HomeWorld.Value.Name.ToString();
+                                currentServer = pc.CurrentWorld.Value.Name.ToString();
+                                classJob = pc.ClassJob.Value.Abbreviation.ToString();
+                                level = pc.Level;
+                                posX = Math.Round(pc.Position.X, 2);
+                                posY = Math.Round(pc.Position.Y, 2);
+                                posZ = Math.Round(pc.Position.Z, 2);
+                                rotation = Math.Round(pc.Rotation, 3);
+                                isMounted = Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.Mounted];
+
+                                var currentTerritory = Svc.ClientState.TerritoryType;
+                                territoryId = currentTerritory;
+                                var terrRow = ECommons.DalamudServices.Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>()?.GetRowOrDefault(currentTerritory);
+                                if (terrRow is { } tr)
+                                {
+                                    var mapRow = tr.Map.ValueNullable;
+                                    if (mapRow is { } mr)
+                                    {
+                                        mapCode = mr.Id.ExtractText();
+                                        sizeFactor = mr.SizeFactor > 0 ? mr.SizeFactor : 100;
+                                        offsetX = mr.OffsetX;
+                                        offsetY = mr.OffsetY;
+                                    }
+                                }
+
+                                var currentZone = ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == currentTerritory);
+                                if (currentZone is not null)
+                                {
+                                    currentMap = currentZone.Name;
+                                }
+                                else
+                                {
+                                    var placeName = terrRow?.PlaceName.ValueNullable?.Name.ExtractText();
+                                    currentMap = !string.IsNullOrWhiteSpace(placeName)
+                                        ? placeName
+                                        : (activeZones.Count > 0 ? activeZones[0].Name : "Unknown");
+                                }
+
+                                var fates = clib.Utils.PublicEvent.Fates;
+                                if (fates is not null)
+                                {
+                                    var playerVec = pc.Position;
+                                    foreach (var f in fates)
+                                    {
+                                        if (!f.IsOnMap) continue;
+                                        var awaitsNpc = Core.Game.Fates.FateScanner.AwaitsNpcStart(f);
+                                        if (f.State != FFXIVClientStructs.FFXIV.Client.Game.Fate.FateState.Running && !awaitsNpc)
+                                            continue;
+
+                                        var dist = System.Numerics.Vector3.Distance(playerVec, f.Position);
+                                        var isTarget = dist <= Math.Max(f.Radius + 18f, 42f);
+
+                                        activeFates.Add(new
+                                        {
+                                            id = f.Id,
+                                            name = f.Name ?? "FATE",
+                                            progress = (int)f.Progress,
+                                            timeRemaining = (int)f.TimeRemaining,
+                                            level = (int)f.Level,
+                                            hasBonus = f.HasBonus,
+                                            x = Math.Round(f.Position.X, 1),
+                                            z = Math.Round(f.Position.Z, 1),
+                                            radius = Math.Round(f.Radius, 1),
+                                            isTarget
+                                        });
+
+                                        if (activeFates.Count >= 16) break;
+                                    }
+                                }
+                            }
+                            tcs.SetResult(true);
+                        }
+                        catch (Exception ex)
+                        {
+                            tcs.SetException(ex);
+                        }
+                    });
+
+                    await tcs.Task;
+
+                    if (playerName is not null && serverName is not null)
+                    {
+                        var gpsPayload = new
+                        {
+                            playerName,
+                            serverName,
+                            currentServer,
+                            source = "plugin",
+                            isPlugin = true,
+                            currentMap,
+                            territoryId,
+                            mapCode,
+                            sizeFactor,
+                            offsetX,
+                            offsetY,
+                            posX,
+                            posY,
+                            posZ,
+                            rotation,
+                            isMounted,
+                            classJob,
+                            level,
+                            phase = Phase.ToString(),
+                            state = Status,
+                            activeFates
+                        };
+
+                        var gpsJson = JsonSerializer.Serialize(gpsPayload);
+                        foreach (var endpoint in GpsEndpoints)
+                        {
+                            try
+                            {
+                                using var content = new System.Net.Http.StringContent(gpsJson, System.Text.Encoding.UTF8, "application/json");
+                                var res = await gpsClient.PostAsync(endpoint, content, token);
+                                if (res.IsSuccessStatusCode)
+                                {
+                                    var body = await res.Content.ReadAsStringAsync(token);
+                                    isGpsWatched = body.Contains("\"watching\":true", StringComparison.OrdinalIgnoreCase);
+                                    break;
+                                }
+                            }
+                            catch
+                            {
+                                // Ignora falhas de rede transitórias no stream de GPS
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignora erros transitórios
+                }
+
+                try
+                {
+                    await Task.Delay(gpsDelayMs, token);
                 }
                 catch (OperationCanceledException)
                 {
