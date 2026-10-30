@@ -31,6 +31,11 @@ internal sealed partial class AutoFateController
 
     private static readonly Random rng = new();
 
+    public AutoFateController()
+    {
+        EnsureTelemetryWorker();
+    }
+
     private static void Diag(string message)
         => ECommons.DalamudServices.Svc.Log.Info($"{AfgConstants.LogPrefix} {message}");
 
@@ -127,8 +132,6 @@ internal sealed partial class AutoFateController
         Plugin.Cfg.WasRunningBeforeDisconnect = false;
         Plugin.Cfg.Save();
 
-        StopTelemetry();
-
         var ending = session;
         currentTask = null;
         grindTask = null;
@@ -159,16 +162,116 @@ internal sealed partial class AutoFateController
     }
 
     private System.Threading.CancellationTokenSource? telemetryCts;
+    private readonly System.Threading.SemaphoreSlim telemetryWakeSignal = new(0, 1);
 
     private static readonly string[] TelemetryEndpoints =
     [
-        "https://fatetracker.discloud.app/api/track",
-        "https://y-kohl-omega.vercel.app/api/track"
+        "https://fatefrenzytracker.discloud.app/api/track"
     ];
 
-    private void StartTelemetry(AutoFateSession s)
+    // Catálogo garantido dos 54 itens oficiais de Bicolor Gemstone (incluindo os 2 Vouchers)
+    // para que o inventário seja lido mesmo antes ou independentemente do cache do Lumina.
+    private static readonly (uint Id, string Name, uint Cost)[] GuaranteedBicolorItems =
+    [
+        (43961, "Turali Bicolor Gemstone Voucher", 100),
+        (35833, "Bicolor Gemstone Voucher", 100),
+        // Dawntrail (3 Gemstones)
+        (44072, "Alexandrian Axe Beak Wing", 3),
+        (44063, "Alpaca Fillet", 3),
+        (44055, "Br'aax Hide", 3),
+        (44065, "Branchbearer Fruit", 3),
+        (44057, "Gargantua Hide", 3),
+        (44056, "Gomphotherium Skin", 3),
+        (44054, "Hammerhead Crocodile Skin", 3),
+        (44069, "Lesser Apollyon Shell", 3),
+        (44067, "Megamaguey Pineapple", 3),
+        (44066, "Nopalitender Tuna", 3),
+        (44068, "Poison Frog Secretions", 3),
+        (44106, "Rroneek Chuck", 3),
+        (44027, "Rroneek Fleece", 3),
+        (44053, "Silver Lobo Hide", 3),
+        (44064, "Swampmonk Thigh", 3),
+        (44071, "Tumbleclaw Weeds", 3),
+        (44070, "Ty'aitya Wingblade", 3),
+        // Endwalker (2 Gemstones)
+        (36203, "Almasty Fur", 2),
+        (36264, "Amra", 2),
+        (36261, "Berkanan Sap", 2),
+        (36630, "Bird of Elpis Breast", 2),
+        (36262, "Dynamis Crystal", 2),
+        (36259, "Dynamite Ash", 2),
+        (36256, "Egg of Elpis", 2),
+        (36242, "Gaja Hide", 2),
+        (36253, "Hamsa Tenderloin", 2),
+        (36245, "Kumbhira Skin", 2),
+        (36258, "Lunatender Blossom", 2),
+        (36243, "Luncheon Toad Skin", 2),
+        (36257, "Mousse Flesh", 2),
+        (36246, "Ophiotauros Hide", 2),
+        (36255, "Ovibos Milk", 2),
+        (36260, "Petalouda Scales", 2),
+        (36244, "Saiga Hide", 2),
+        (36254, "Yakow Chuck", 2),
+        // Shadowbringers (1-2 Gemstones)
+        (27763, "Hoptrap Leaf", 1),
+        (27798, "Island Wolf Fang", 1),
+        (27851, "Lorikeet Egg", 1),
+        (27852, "Ovim Meat", 1),
+        (27850, "Rail Tenderloin", 1),
+        (27764, "Silkmoth Scales", 1),
+        (27773, "Vampire Cup Vine", 1),
+        (27774, "Vampire Vine Sap", 1),
+        (27734, "Atrociraptor Skin", 2),
+        (27799, "Cubus Flesh", 2),
+        (27733, "Green Glider Skin", 2),
+        (27800, "Hydrozoan Umbrella", 2),
+        (27797, "Lorikeet Down", 2),
+        (27756, "Ovim Fleece", 2),
+        (27736, "Sea Swallow Skin", 2),
+        (27732, "Smilodon Skin", 2),
+        (27735, "Zonure Skin", 2)
+    ];
+
+    private static unsafe int GetCompleteItemCount(InventoryManager* im, uint itemId)
     {
-        telemetryCts?.Cancel();
+        if (im is null || itemId == 0) return 0;
+
+        // 1. Inventário Principal (Inventory1..4), NQ + HQ
+        var total = im->GetInventoryItemCount(itemId, false, false, false)
+                  + im->GetInventoryItemCount(itemId, true, false, false);
+
+        // 2. Chocobo Saddlebags (SaddleBag1, SaddleBag2, PremiumSaddleBag1, PremiumSaddleBag2), NQ + HQ
+        ReadOnlySpan<InventoryType> saddleBags =
+        [
+            InventoryType.SaddleBag1,
+            InventoryType.SaddleBag2,
+            InventoryType.PremiumSaddleBag1,
+            InventoryType.PremiumSaddleBag2
+        ];
+
+        foreach (var bag in saddleBags)
+        {
+            total += im->GetItemCountInContainer(itemId, bag, false)
+                   + im->GetItemCountInContainer(itemId, bag, true);
+        }
+
+        return total;
+    }
+
+    private void StartTelemetry(AutoFateSession _)
+    {
+        EnsureTelemetryWorker();
+        if (telemetryWakeSignal.CurrentCount == 0)
+        {
+            try { telemetryWakeSignal.Release(); } catch { }
+        }
+    }
+
+    private void EnsureTelemetryWorker()
+    {
+        if (telemetryCts is not null && !telemetryCts.IsCancellationRequested)
+            return;
+
         telemetryCts = new System.Threading.CancellationTokenSource();
         var token = telemetryCts.Token;
 
@@ -177,11 +280,21 @@ internal sealed partial class AutoFateController
             var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(12) };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
+            // Aguarda 3 segundos após carregar o plugin para o LocalPlayer e inventário estabilizarem
+            try { await Task.Delay(3000, token); } catch (TaskCanceledException) { return; }
+
+            var lastIdleSyncAt = DateTime.MinValue;
+
             while (!token.IsCancellationRequested)
             {
+                var nextDelayMs = 45000;
                 try
                 {
-                    if (clib.Services.Svc.Automation.Running && !Paused && session is not null)
+                    var activeSession = session;
+                    var isActivelyRunning = clib.Services.Svc.Automation.Running && !Paused && activeSession is not null;
+                    var shouldIdleSync = !isActivelyRunning && (DateTime.UtcNow - lastIdleSyncAt).TotalSeconds >= 90;
+
+                    if (isActivelyRunning || shouldIdleSync)
                     {
                         string? playerName = null;
                         string? serverName = null;
@@ -190,6 +303,7 @@ internal sealed partial class AutoFateController
                         string classJob = "";
                         int level = 0;
                         int walletGemstones = 0;
+                        int vouchersFound = 0;
                         string selectedTradeItem = "";
                         List<object> tradeItems = [];
 
@@ -199,7 +313,7 @@ internal sealed partial class AutoFateController
                             try
                             {
                                 var pc = Svc.Objects.LocalPlayer;
-                                if (pc is not null)
+                                if (pc is not null && !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas])
                                 {
                                     playerName = pc.Name.ToString();
                                     serverName = pc.HomeWorld.Value.Name.ToString();
@@ -222,8 +336,11 @@ internal sealed partial class AutoFateController
                                             : (activeZones.Count > 0 ? activeZones[0].Name : "Unknown");
                                     }
 
-                                    s.UpdateGemstones();
-                                    s.UpdateExp();
+                                    if (activeSession is not null)
+                                    {
+                                        activeSession.UpdateGemstones();
+                                        activeSession.UpdateExp();
+                                    }
                                     walletGemstones = GemstoneCatalog.CurrentWalletCount();
 
                                     var targetItem = GemstoneCatalog.FindById(Plugin.Cfg.TargetTradeItemId);
@@ -234,12 +351,33 @@ internal sealed partial class AutoFateController
                                         var im = InventoryManager.Instance();
                                         if (im is not null)
                                         {
+                                            var addedIds = new HashSet<uint>();
+
+                                            // 1. Sempre escaneia todos os 54 itens garantidos (incluindo os Vouchers 35833 e 43961)
+                                            foreach (var gItem in GuaranteedBicolorItems)
+                                            {
+                                                addedIds.Add(gItem.Id);
+                                                var count = GetCompleteItemCount(im, gItem.Id);
+                                                if (gItem.Id is 35833 or 43961)
+                                                    vouchersFound += count;
+
+                                                tradeItems.Add(new
+                                                {
+                                                    id = gItem.Id,
+                                                    name = gItem.Name,
+                                                    count,
+                                                    cost = gItem.Cost
+                                                });
+                                            }
+
+                                            // 2. Escaneia itens extras do catálogo Lumina que o jogador possua no inventário ou tenha selecionado
                                             foreach (var item in GemstoneCatalog.All)
                                             {
-                                                var count = im->GetInventoryItemCount(item.ItemId) + im->GetInventoryItemCount(item.ItemId, true);
-                                                var isStandardMatOrVoucher = item.CostPerOne <= 3 || item.ItemId is 35833 or 43961;
-                                                if (count > 0 || isStandardMatOrVoucher || item.ItemId == Plugin.Cfg.TargetTradeItemId)
+                                                if (addedIds.Contains(item.ItemId)) continue;
+                                                var count = GetCompleteItemCount(im, item.ItemId);
+                                                if (count > 0 || item.ItemId == Plugin.Cfg.TargetTradeItemId)
                                                 {
+                                                    addedIds.Add(item.ItemId);
                                                     tradeItems.Add(new
                                                     {
                                                         id = item.ItemId,
@@ -262,13 +400,20 @@ internal sealed partial class AutoFateController
 
                         await taskCompletion.Task;
 
-                        if (playerName is not null)
+                        if (playerName is not null && serverName is not null)
                         {
+                            var isIdleSync = !isActivelyRunning;
+                            if (isIdleSync)
+                                lastIdleSyncAt = DateTime.UtcNow;
+
                             var payload = new
                             {
                                 playerName,
                                 source = "plugin",
-                                version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "1.8.6.0",
+                                isPlugin = true,
+                                clientType = "FateFrenzy.Plugin",
+                                isIdleSync,
+                                version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "1.8.7.0",
                                 serverName,
                                 currentServer,
                                 currentMap,
@@ -277,13 +422,13 @@ internal sealed partial class AutoFateController
                                 phase = Phase.ToString(),
                                 state = Status,
                                 walletGemstones,
-                                gemstonesFarmed = s.GemstonesEarned,
-                                fatesCompleted = s.CompletedCount,
-                                fatesPerHour = Math.Round(s.FatesPerHour, 1),
-                                expEarned = s.ExpEarned,
-                                expPerHour = (long)Math.Round(s.ExpPerHour),
-                                levelsGained = s.LevelsGained,
-                                sessionDurationMs = (long)s.Elapsed.TotalMilliseconds,
+                                gemstonesFarmed = activeSession?.GemstonesEarned ?? 0,
+                                fatesCompleted = activeSession?.CompletedCount ?? 0,
+                                fatesPerHour = activeSession is not null ? Math.Round(activeSession.FatesPerHour, 1) : 0,
+                                expEarned = activeSession?.ExpEarned ?? 0,
+                                expPerHour = activeSession is not null ? (long)Math.Round(activeSession.ExpPerHour) : 0,
+                                levelsGained = activeSession?.LevelsGained ?? 0,
+                                sessionDurationMs = activeSession is not null ? (long)activeSession.Elapsed.TotalMilliseconds : 0,
                                 selectedTradeItem,
                                 tradeItems
                             };
@@ -297,15 +442,20 @@ internal sealed partial class AutoFateController
                                     var response = await client.PostAsync(endpoint, content, token);
                                     if (response.IsSuccessStatusCode)
                                     {
-                                        Diag($"Telemetry ping sent ({endpoint}): status={response.StatusCode}");
+                                        Diag($"Telemetry ping sent ({endpoint}, idle={isIdleSync}, gems={walletGemstones}, vouchers={vouchersFound}): status={response.StatusCode}");
                                         break;
                                     }
                                 }
                                 catch
                                 {
-                                    // Tenta o próximo endpoint (fallback Discloud -> Vercel)
+                                    // Tenta o próximo endpoint
                                 }
                             }
+                        }
+                        else if (isActivelyRunning)
+                        {
+                            // Se estava em tela de loading/teleporte, tenta novamente em 3 segundos em vez de esperar 45s
+                            nextDelayMs = 3000;
                         }
                     }
                 }
@@ -316,9 +466,9 @@ internal sealed partial class AutoFateController
 
                 try
                 {
-                    await Task.Delay(60000, token);
+                    await telemetryWakeSignal.WaitAsync(nextDelayMs, token);
                 }
-                catch (TaskCanceledException)
+                catch (OperationCanceledException)
                 {
                     break;
                 }

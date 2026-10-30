@@ -16,3 +16,4 @@ Thumbs.db
 
 # Local telemetry server & credentials
 fate-tracker-server/
+fatetracker*.json

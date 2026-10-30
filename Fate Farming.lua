@@ -4261,19 +4261,19 @@ while not StopScript do
 
             if playerName and serverName then
                 local jsonBody = string.format(
-                    '{"playerName":"%s","source":"script","version":"3.2.2","serverName":"%s","currentServer":"%s","currentMap":"%s","classJob":"%s","level":%d,"walletGemstones":%d,"gemstonesFarmed":%d,"fatesCompleted":%d,"sessionDurationMs":%d,"selectedTradeItem":"%s","tradeItems":%s}',
+                    '{"playerName":"%s","source":"script","isPlugin":false,"clientType":"FateFarming.Lua","version":"3.2.3","serverName":"%s","currentServer":"%s","currentMap":"%s","classJob":"%s","level":%d,"walletGemstones":%d,"gemstonesFarmed":%d,"fatesCompleted":%d,"sessionDurationMs":%d,"selectedTradeItem":"%s","tradeItems":%s}',
                     playerName, serverName, currentServer, safeMap, jobAbbr, charLevel, walletGems, gemsFarmed, fatesDone, sessionDurMs, safeTrade, tradeItemsJson
                 )
                 -- Try C# HttpClient first, fallback to powershell
                 if GlobalTrackerClient ~= nil and StringContent ~= nil and Encoding ~= nil then
                     local ok, err = pcall(function()
                         local stringContent = StringContent(jsonBody, Encoding.UTF8, "application/json")
-                        GlobalTrackerClient:PostAsync("https://y-kohl-omega.vercel.app/api/track", stringContent)
+                        GlobalTrackerClient:PostAsync("https://fatefrenzytracker.discloud.app/api/track", stringContent)
                     end)
                 else
                     pcall(function()
                         local escapedForPs = string.gsub(jsonBody, '"', '\\"')
-                        local psCmd = 'start /B powershell -WindowStyle Hidden -Command "Invoke-RestMethod -Uri https://y-kohl-omega.vercel.app/api/track -Method Post -Body \'' .. escapedForPs .. '\' -ContentType \'application/json\' -UserAgent \'Mozilla/5.0\'"'
+                        local psCmd = 'start /B powershell -WindowStyle Hidden -Command "Invoke-RestMethod -Uri https://fatefrenzytracker.discloud.app/api/track -Method Post -Body \'' .. escapedForPs .. '\' -ContentType \'application/json\' -UserAgent \'Mozilla/5.0\'"'
                         os.execute(psCmd)
                     end)
                 end
