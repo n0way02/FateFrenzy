@@ -1,5 +1,6 @@
 using FateFrenzy.Core.Trading;
 using clib.Services;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using System;
 
 namespace FateFrenzy.Core.Tasks;
@@ -51,6 +52,31 @@ internal sealed partial class AutoFateController
             // we resume the FATE grind.
             RunTask(new AutoRepair(), () => HandlePostFateHandoffs(owningSession));
             return;
+        }
+
+        if (Plugin.Cfg.MountAutomationEnabled)
+        {
+            unsafe
+            {
+                var im = InventoryManager.Instance();
+                if (im != null)
+                {
+                    var whistleCount = im->GetInventoryItemCount(Plugin.Cfg.MountTargetItemId, false, false, false);
+                    if (whistleCount > 0)
+                    {
+                        owningSession.PendingRetainerSell = true;
+                        owningSession.PendingRetainerUndercutOnly = false;
+                    }
+                    else if (Plugin.Cfg.MountRole is MountAutomationRole.MasterSeller or MountAutomationRole.Solo)
+                    {
+                        var voucherCount = im->GetInventoryItemCount(Plugin.Cfg.MountTargetVoucherId, false, false, false);
+                        if (voucherCount >= 500)
+                        {
+                            owningSession.PendingMountExchange = true;
+                        }
+                    }
+                }
+            }
         }
 
         if (owningSession.PendingMountExchange)
