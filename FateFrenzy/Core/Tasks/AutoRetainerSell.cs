@@ -8,6 +8,7 @@ using FateFrenzy.Core.Game.Ops;
 using FateFrenzy.Core.Ipc;
 using FateFrenzy.Core.VoucherTrading;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
 using System.Numerics;
@@ -201,79 +202,259 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
         return master.Retainers[index].Select();
     }
 
-    private async Task ProcessSellNewItem(uint itemId, int price)
-    {
-        ClickMenuEntryContaining("Sell items");
-        await DelayMs(ActionDelayMs * 2);
+    private static unsafe bool IsRetainerSellListOpen()
+        => GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSellList", out var a) && GenericHelpers.IsAddonReady(a);
 
-        if (TrySetSellAskingPrice(price))
+    private static unsafe uint GetOpenInventoryAddonId()
+    {
+        var names = new[] { "InventoryRetainerLarge", "InventoryExpansion", "InventoryLarge", "Inventory" };
+        foreach (var name in names)
         {
-            await DelayMs(ActionDelayMs);
-            ConfirmSell();
-            await DelayMs(ActionDelayMs);
+            if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(name, out var addon) && GenericHelpers.IsAddonReady(addon))
+                return addon->Id;
         }
+        return 0;
     }
 
-    private async Task ProcessAdjustPrice(uint itemId, int price)
+    private static unsafe (InventoryType bag, int slot)? FindItemSlot(uint itemId)
     {
-        ClickMenuEntryContaining("Adjust prices");
-        await DelayMs(ActionDelayMs * 2);
+        var im = InventoryManager.Instance();
+        if (im == null) return null;
 
-        if (TryGetRetainerAskingPrice(out var curPrice))
+        var bags = new[]
         {
-            if (curPrice != price)
+            InventoryType.Inventory1,
+            InventoryType.Inventory2,
+            InventoryType.Inventory3,
+            InventoryType.Inventory4
+        };
+
+        foreach (var bag in bags)
+        {
+            var container = im->GetInventoryContainer(bag);
+            if (container == null) continue;
+
+            for (var slot = 0; slot < container->Size; slot++)
             {
-                TrySetSellAskingPrice(price);
-                await DelayMs(ActionDelayMs);
-                ConfirmSell();
-                await DelayMs(ActionDelayMs);
-            }
-            else
-            {
-                CancelSell();
+                var item = container->GetInventorySlot(slot);
+                if (item != null && item->ItemId == itemId && item->Quantity > 0)
+                {
+                    return (bag, slot);
+                }
             }
         }
+        return null;
     }
 
-    private static unsafe bool TryGetRetainerAskingPrice(out int currentPrice)
+    private static unsafe bool TryOpenInventorySlotContextMenu(InventoryType bag, int slot, uint addonId)
     {
-        currentPrice = 0;
-        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var sellAddon) && GenericHelpers.IsAddonReady(sellAddon))
+        var aic = AgentInventoryContext.Instance();
+        if (aic == null) return false;
+        aic->OpenForItemSlot(bag, slot, 0, addonId);
+        return true;
+    }
+
+    private static unsafe bool IsRetainerSellOpen()
+        => GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var a) && GenericHelpers.IsAddonReady(a);
+
+    private static unsafe bool IsContextMenuOpen()
+        => GenericHelpers.TryGetAddonByName<AtkUnitBase>("ContextMenu", out var a) && GenericHelpers.IsAddonReady(a);
+
+    private static unsafe bool TrySelectSellFromContextMenu()
+    {
+        if (!GenericHelpers.TryGetAddonByName<AtkUnitBase>("ContextMenu", out var addon) || !GenericHelpers.IsAddonReady(addon))
+            return false;
+
+        var menu = new AddonMaster.ContextMenu(addon);
+        for (var i = 0; i < menu.Entries.Length; i++)
         {
-            var sell = new AddonMaster.RetainerSell(sellAddon);
-            currentPrice = sell.AskingPrice;
-            return true;
+            var text = menu.Entries[i].Text;
+            if (text.Contains("Sell", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("Put Up", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("Market", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!menu.Entries[i].Select())
+                {
+                    Callback.Fire(addon, true, 0, i, 0);
+                }
+                return true;
+            }
         }
         return false;
     }
 
-    private static unsafe bool TrySetSellAskingPrice(int price)
+    private static unsafe bool TrySetRetainerSellPrice(int price)
     {
-        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var sellAddon) && GenericHelpers.IsAddonReady(sellAddon))
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var addon) && GenericHelpers.IsAddonReady(addon))
         {
-            var sell = new AddonMaster.RetainerSell(sellAddon);
+            var sell = new AddonMaster.RetainerSell(addon);
             sell.AskingPrice = price;
             return true;
         }
         return false;
     }
 
-    private static unsafe void ConfirmSell()
+    private static unsafe bool ConfirmRetainerSell()
     {
-        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var sellAddon) && GenericHelpers.IsAddonReady(sellAddon))
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var addon) && GenericHelpers.IsAddonReady(addon))
         {
-            var sell = new AddonMaster.RetainerSell(sellAddon);
+            var sell = new AddonMaster.RetainerSell(addon);
             sell.Confirm();
+            return true;
+        }
+        return false;
+    }
+
+    private static unsafe bool CancelRetainerSell()
+    {
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var addon) && GenericHelpers.IsAddonReady(addon))
+        {
+            var sell = new AddonMaster.RetainerSell(addon);
+            sell.Cancel();
+            return true;
+        }
+        return false;
+    }
+
+    private static unsafe bool TryGetRetainerSellPrice(out int currentPrice)
+    {
+        currentPrice = 0;
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var addon) && GenericHelpers.IsAddonReady(addon))
+        {
+            var sell = new AddonMaster.RetainerSell(addon);
+            currentPrice = sell.AskingPrice;
+            return true;
+        }
+        return false;
+    }
+
+    private static unsafe bool ClickRetainerSellListSlot(int index)
+    {
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSellList", out var addon) && GenericHelpers.IsAddonReady(addon))
+        {
+            Callback.Fire(addon, true, 0, index);
+            return true;
+        }
+        return false;
+    }
+
+    private static unsafe void CloseRetainerSellList()
+    {
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSellList", out var addon) && GenericHelpers.IsAddonReady(addon))
+        {
+            Callback.Fire(addon, true, -1);
         }
     }
 
-    private static unsafe void CancelSell()
+    private async Task ProcessSellNewItem(uint itemId, int price)
     {
-        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var sellAddon) && GenericHelpers.IsAddonReady(sellAddon))
+        Diag("Selecting 'Sell items in your inventory on the market.' from Retainer menu...");
+        ClickMenuEntryContaining("Sell items in your inventory");
+        await DelayMs(ActionDelayMs * 2);
+
+        // Wait for RetainerSellList and Inventory to open
+        var waitWindowDeadline = Environment.TickCount64 + AddonWaitMs;
+        while (Environment.TickCount64 < waitWindowDeadline && !CancelToken.IsCancellationRequested)
         {
-            var sell = new AddonMaster.RetainerSell(sellAddon);
-            sell.Cancel();
+            if (IsRetainerSellListOpen() && GetOpenInventoryAddonId() != 0)
+                break;
+            await DelayMs(200);
         }
+
+        var slotInfo = FindItemSlot(itemId);
+        if (slotInfo == null)
+        {
+            Diag($"Could not find Mount Whistle (ID {itemId}) in player inventory.");
+            CloseRetainerSellList();
+            return;
+        }
+
+        var invAddonId = GetOpenInventoryAddonId();
+        Diag($"Found Whistle in bag {slotInfo.Value.bag} slot {slotInfo.Value.slot}. Triggering inventory context menu (addonId={invAddonId})...");
+        TryOpenInventorySlotContextMenu(slotInfo.Value.bag, slotInfo.Value.slot, invAddonId);
+
+        // Wait for either ContextMenu or RetainerSell addon
+        var waitDialogDeadline = Environment.TickCount64 + 8000;
+        while (Environment.TickCount64 < waitDialogDeadline && !CancelToken.IsCancellationRequested)
+        {
+            if (IsRetainerSellOpen())
+            {
+                break;
+            }
+
+            if (IsContextMenuOpen())
+            {
+                Diag("ContextMenu detected; selecting sell entry...");
+                if (TrySelectSellFromContextMenu())
+                {
+                    await DelayMs(600);
+                }
+            }
+
+            await DelayMs(200);
+        }
+
+        // Set asking price and confirm sale
+        if (IsRetainerSellOpen())
+        {
+            Diag($"Setting asking price to {price:N0} gil...");
+            TrySetRetainerSellPrice(price);
+            await DelayMs(ActionDelayMs);
+            ConfirmRetainerSell();
+            await DelayMs(ActionDelayMs * 2);
+        }
+        else
+        {
+            Diag("RetainerSell dialog did not appear for setting price.");
+        }
+
+        // Close RetainerSellList and return to SelectString
+        CloseRetainerSellList();
+        await DelayMs(ActionDelayMs);
+        await WaitUntilTimed(IsSelectStringOpen, AddonWaitMs, "wait-return-to-retainer-menu");
+    }
+
+    private async Task ProcessAdjustPrice(uint itemId, int price)
+    {
+        Diag("Selecting 'Have retainer sell items on the market.' from Retainer menu...");
+        ClickMenuEntryContaining("Have retainer sell");
+        await DelayMs(ActionDelayMs * 2);
+
+        if (!await WaitUntilTimed(IsRetainerSellListOpen, AddonWaitMs, "wait-retainer-sell-list"))
+        {
+            Diag("RetainerSellList did not open for price adjustment.");
+            return;
+        }
+
+        // Click slot 0 in RetainerSellList
+        Diag("Clicking item slot 0 in RetainerSellList...");
+        ClickRetainerSellListSlot(0);
+        await DelayMs(ActionDelayMs);
+
+        if (await WaitUntilTimed(IsRetainerSellOpen, AddonWaitMs, "wait-retainer-sell-price"))
+        {
+            if (TryGetRetainerSellPrice(out var curPrice))
+            {
+                Diag($"RetainerSell open. Current asking price: {curPrice:N0}, target price: {price:N0}");
+                if (curPrice != price)
+                {
+                    TrySetRetainerSellPrice(price);
+                    await DelayMs(ActionDelayMs);
+                    ConfirmRetainerSell();
+                    await DelayMs(ActionDelayMs);
+                }
+                else
+                {
+                    Diag("Asking price is already equal to target price; cancelling dialog.");
+                    CancelRetainerSell();
+                    await DelayMs(ActionDelayMs);
+                }
+            }
+        }
+
+        CloseRetainerSellList();
+        await DelayMs(ActionDelayMs);
+        await WaitUntilTimed(IsSelectStringOpen, AddonWaitMs, "wait-return-to-retainer-menu");
     }
 
     private static unsafe void ClickMenuEntryContaining(string text)

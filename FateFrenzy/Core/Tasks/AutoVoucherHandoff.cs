@@ -308,11 +308,25 @@ public sealed class AutoVoucherHandoff(string partnerName) : AutoCommon
             await DelayMs(200);
         }
 
-        SharedAccountCoordinator.Heartbeat(isReadyForTrade: false);
+        // Wait for inventory update if we are MasterSeller
+        if (Plugin.Cfg.MountRole is MountAutomationRole.MasterSeller or MountAutomationRole.Solo)
+        {
+            var waitDeadline = Environment.TickCount64 + 4000;
+            while (CurrentVoucherCount(voucherId) < 500 && Environment.TickCount64 < waitDeadline)
+            {
+                await DelayMs(300);
+            }
+        }
 
         var finalVouchers = CurrentVoucherCount(voucherId);
+        SharedAccountCoordinator.Heartbeat(isReadyForTrade: false);
+
         Svc.Chat.Print($"[FateFrenzy] Voucher trade with {partnerName} finished! Vouchers: before={initialVouchers}, after={finalVouchers}.");
-        await DelayMs(1500);
+        if (Plugin.Cfg.MountRole is MountAutomationRole.MasterSeller or MountAutomationRole.Solo && finalVouchers >= 500)
+        {
+            Svc.Chat.Print("[FateFrenzy] Reached 500 vouchers! Proceeding directly to Edelina for Mount Exchange.");
+        }
+        await DelayMs(1000);
     }
 
     private readonly struct VoucherSlotInfo(InventoryType bag, ushort slot, int quantity)

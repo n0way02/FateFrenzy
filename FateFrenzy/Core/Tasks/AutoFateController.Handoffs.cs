@@ -66,6 +66,7 @@ internal sealed partial class AutoFateController
                     {
                         owningSession.PendingRetainerSell = true;
                         owningSession.PendingRetainerUndercutOnly = false;
+                        owningSession.PendingRetainerSellFromZone ??= owningSession.PendingMountExchangeFromZone ?? owningSession.PendingVoucherHandoffFromZone;
                     }
                     else if (Plugin.Cfg.MountRole is MountAutomationRole.MasterSeller or MountAutomationRole.Solo)
                     {
@@ -73,6 +74,7 @@ internal sealed partial class AutoFateController
                         if (voucherCount >= 500)
                         {
                             owningSession.PendingMountExchange = true;
+                            owningSession.PendingMountExchangeFromZone ??= owningSession.PendingVoucherHandoffFromZone;
                         }
                     }
                 }
