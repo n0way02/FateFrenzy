@@ -5,6 +5,8 @@ using FateFrenzy.Core.Zones;
 using FateFrenzy.Core.Ipc;
 using clib.Services;
 using ECommons.Automation;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace FateFrenzy.Core.Tasks;
@@ -158,6 +160,12 @@ internal sealed partial class AutoFateController
 
     private System.Threading.CancellationTokenSource? telemetryCts;
 
+    private static readonly string[] TelemetryEndpoints =
+    [
+        "https://fatetracker.discloud.app/api/track",
+        "https://y-kohl-omega.vercel.app/api/track"
+    ];
+
     private void StartTelemetry(AutoFateSession s)
     {
         telemetryCts?.Cancel();
@@ -166,7 +174,7 @@ internal sealed partial class AutoFateController
 
         Task.Run(async () =>
         {
-            var client = new System.Net.Http.HttpClient();
+            var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(12) };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
             while (!token.IsCancellationRequested)
@@ -179,6 +187,11 @@ internal sealed partial class AutoFateController
                         string? serverName = null;
                         string? currentServer = null;
                         string? currentMap = null;
+                        string classJob = "";
+                        int level = 0;
+                        int walletGemstones = 0;
+                        string selectedTradeItem = "";
+                        List<object> tradeItems = [];
 
                         var taskCompletion = new TaskCompletionSource<bool>();
                         _ = Svc.Framework.RunOnFrameworkThread(() =>
@@ -191,10 +204,53 @@ internal sealed partial class AutoFateController
                                     playerName = pc.Name.ToString();
                                     serverName = pc.HomeWorld.Value.Name.ToString();
                                     currentServer = pc.CurrentWorld.Value.Name.ToString();
+                                    classJob = pc.ClassJob.Value.Abbreviation.ToString();
+                                    level = pc.Level;
 
                                     var currentTerritory = Svc.ClientState.TerritoryType;
                                     var currentZone = ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == currentTerritory);
-                                    currentMap = currentZone?.Name ?? (activeZones.Count > 0 ? activeZones[0].Name : "Unknown");
+                                    if (currentZone is not null)
+                                    {
+                                        currentMap = currentZone.Name;
+                                    }
+                                    else
+                                    {
+                                        var terrRow = ECommons.DalamudServices.Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>()?.GetRowOrDefault(currentTerritory);
+                                        var placeName = terrRow?.PlaceName.ValueNullable?.Name.ExtractText();
+                                        currentMap = !string.IsNullOrWhiteSpace(placeName)
+                                            ? placeName
+                                            : (activeZones.Count > 0 ? activeZones[0].Name : "Unknown");
+                                    }
+
+                                    s.UpdateGemstones();
+                                    s.UpdateExp();
+                                    walletGemstones = GemstoneCatalog.CurrentWalletCount();
+
+                                    var targetItem = GemstoneCatalog.FindById(Plugin.Cfg.TargetTradeItemId);
+                                    selectedTradeItem = targetItem?.ItemName ?? "";
+
+                                    unsafe
+                                    {
+                                        var im = InventoryManager.Instance();
+                                        if (im is not null)
+                                        {
+                                            foreach (var item in GemstoneCatalog.All)
+                                            {
+                                                var count = im->GetInventoryItemCount(item.ItemId) + im->GetInventoryItemCount(item.ItemId, true);
+                                                var isStandardMatOrVoucher = item.CostPerOne <= 3 || item.ItemId is 35833 or 43961;
+                                                if (count > 0 || isStandardMatOrVoucher || item.ItemId == Plugin.Cfg.TargetTradeItemId)
+                                                {
+                                                    tradeItems.Add(new
+                                                    {
+                                                        id = item.ItemId,
+                                                        name = item.ItemName,
+                                                        count,
+                                                        cost = item.CostPerOne
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                                 taskCompletion.SetResult(true);
                             }
@@ -208,14 +264,48 @@ internal sealed partial class AutoFateController
 
                         if (playerName is not null)
                         {
-                            var annotatedName = playerName + " (plugin)";
-                            var gemsFarmed = s.GemstonesEarned;
+                            var payload = new
+                            {
+                                playerName,
+                                source = "plugin",
+                                version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "1.8.6.0",
+                                serverName,
+                                currentServer,
+                                currentMap,
+                                classJob,
+                                level,
+                                phase = Phase.ToString(),
+                                state = Status,
+                                walletGemstones,
+                                gemstonesFarmed = s.GemstonesEarned,
+                                fatesCompleted = s.CompletedCount,
+                                fatesPerHour = Math.Round(s.FatesPerHour, 1),
+                                expEarned = s.ExpEarned,
+                                expPerHour = (long)Math.Round(s.ExpPerHour),
+                                levelsGained = s.LevelsGained,
+                                sessionDurationMs = (long)s.Elapsed.TotalMilliseconds,
+                                selectedTradeItem,
+                                tradeItems
+                            };
 
-                            var json = $"{{\"playerName\": \"{annotatedName}\", \"serverName\": \"{serverName}\", \"currentServer\": \"{currentServer}\", \"currentMap\": \"{currentMap}\", \"gemstonesFarmed\": {gemsFarmed}}}";
-                            var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
-                            
-                            var response = await client.PostAsync("https://y-kohl-omega.vercel.app/api/track", content, token);
-                            Diag($"Telemetry ping sent: status={response.StatusCode}");
+                            var json = JsonSerializer.Serialize(payload);
+                            foreach (var endpoint in TelemetryEndpoints)
+                            {
+                                try
+                                {
+                                    using var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                                    var response = await client.PostAsync(endpoint, content, token);
+                                    if (response.IsSuccessStatusCode)
+                                    {
+                                        Diag($"Telemetry ping sent ({endpoint}): status={response.StatusCode}");
+                                        break;
+                                    }
+                                }
+                                catch
+                                {
+                                    // Tenta o próximo endpoint (fallback Discloud -> Vercel)
+                                }
+                            }
                         }
                     }
                 }

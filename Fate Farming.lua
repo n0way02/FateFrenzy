@@ -353,25 +353,25 @@ BicolorExchangeData =
         position=Vector3(78, 5, -37),
         shopItems =
         {
-            { itemName = "Bicolor Gemstone Voucher", itemIndex = 8, price = 100 },
-            { itemName = "Ovibos Milk", itemIndex = 9, price = 2 },
-            { itemName = "Hamsa Tenderloin", itemIndex = 10, price = 2 },
-            { itemName = "Yakow Chuck", itemIndex = 11, price = 2 },
-            { itemName = "Bird of Elpis Breast", itemIndex = 12, price = 2 },
-            { itemName = "Egg of Elpis", itemIndex = 13, price = 2 },
-            { itemName = "Amra", itemIndex = 14, price = 2 },
-            { itemName = "Dynamis Crystal", itemIndex = 15, price = 2 },
-            { itemName = "Almasty Fur", itemIndex = 16, price = 2 },
-            { itemName = "Gaja Hide", itemIndex = 17, price = 2 },
-            { itemName = "Luncheon Toad Skin", itemIndex = 18, price = 2 },
-            { itemName = "Saiga Hide", itemIndex = 19, price = 2 },
-            { itemName = "Kumbhira Skin", itemIndex = 20, price = 2 },
-            { itemName = "Ophiotauros Hide", itemIndex = 21, price = 2 },
-            { itemName = "Berkanan Sap", itemIndex = 22, price = 2 },
-            { itemName = "Dynamite Ash", itemIndex = 23, price = 2 },
-            { itemName = "Lunatender Blossom", itemIndex = 24, price = 2 },
-            { itemName = "Mousse Flesh", itemIndex = 25, price = 2 },
-            { itemName = "Petalouda Scales", itemIndex = 26, price = 2 },
+            { itemName = "Bicolor Gemstone Voucher", itemIndex = 8, price = 100, itemId = 35833 },
+            { itemName = "Ovibos Milk", itemIndex = 9, price = 2, itemId = 36255 },
+            { itemName = "Hamsa Tenderloin", itemIndex = 10, price = 2, itemId = 36253 },
+            { itemName = "Yakow Chuck", itemIndex = 11, price = 2, itemId = 36254 },
+            { itemName = "Bird of Elpis Breast", itemIndex = 12, price = 2, itemId = 36630 },
+            { itemName = "Egg of Elpis", itemIndex = 13, price = 2, itemId = 36256 },
+            { itemName = "Amra", itemIndex = 14, price = 2, itemId = 36264 },
+            { itemName = "Dynamis Crystal", itemIndex = 15, price = 2, itemId = 36262 },
+            { itemName = "Almasty Fur", itemIndex = 16, price = 2, itemId = 36203 },
+            { itemName = "Gaja Hide", itemIndex = 17, price = 2, itemId = 36242 },
+            { itemName = "Luncheon Toad Skin", itemIndex = 18, price = 2, itemId = 36243 },
+            { itemName = "Saiga Hide", itemIndex = 19, price = 2, itemId = 36244 },
+            { itemName = "Kumbhira Skin", itemIndex = 20, price = 2, itemId = 36245 },
+            { itemName = "Ophiotauros Hide", itemIndex = 21, price = 2, itemId = 36246 },
+            { itemName = "Berkanan Sap", itemIndex = 22, price = 2, itemId = 36261 },
+            { itemName = "Dynamite Ash", itemIndex = 23, price = 2, itemId = 36259 },
+            { itemName = "Lunatender Blossom", itemIndex = 24, price = 2, itemId = 36258 },
+            { itemName = "Mousse Flesh", itemIndex = 25, price = 2, itemId = 36257 },
+            { itemName = "Petalouda Scales", itemIndex = 26, price = 2, itemId = 36260 },
         }
     },
     {
@@ -386,24 +386,24 @@ BicolorExchangeData =
         },
         shopItems =
         {
-            { itemName = "Turali Bicolor Gemstone Voucher", itemIndex = 6, price = 100 },
-            { itemName = "Alpaca Fillet", itemIndex = 7, price = 3 },
-            { itemName = "Swampmonk Thigh", itemIndex = 8, price = 3 },
-            { itemName = "Rroneek Chuck", itemIndex = 9, price = 3 },
-            { itemName = "Megamaguey Pineapple", itemIndex = 10, price = 3 },
-            { itemName = "Branchbearer Fruit", itemIndex = 11, price = 3 },
-            { itemName = "Nopalitender Tuna", itemIndex = 12, price = 3 },
-            { itemName = "Rroneek Fleece", itemIndex = 13, price = 3 },
-            { itemName = "Silver Lobo Hide", itemIndex = 14, price = 3 },
-            { itemName = "Hammerhead Crocodile Skin", itemIndex = 15, price = 3 },
-            { itemName = "Br'aax Hide", itemIndex = 16, price = 3 },
-            { itemName = "Gomphotherium Skin", itemIndex = 17, price = 3 },
-            { itemName = "Gargantua Hide", itemIndex = 18, price = 3 },
-            { itemName = "Ty'aitya Wingblade", itemIndex = 19, price = 3 },
-            { itemName = "Poison Frog Secretions", itemIndex = 20, price = 3 },
-            { itemName = "Alexandrian Axe Beak Wing", itemIndex = 21, price = 3 },
-            { itemName = "Lesser Apollyon Shell", itemIndex = 22, price = 3 },
-            { itemName = "Tumbleclaw Weeds", itemIndex = 23, price = 3 },
+            { itemName = "Turali Bicolor Gemstone Voucher", itemIndex = 6, price = 100, itemId = 43961 },
+            { itemName = "Alpaca Fillet", itemIndex = 7, price = 3, itemId = 44063 },
+            { itemName = "Swampmonk Thigh", itemIndex = 8, price = 3, itemId = 44064 },
+            { itemName = "Rroneek Chuck", itemIndex = 9, price = 3, itemId = 44106 },
+            { itemName = "Megamaguey Pineapple", itemIndex = 10, price = 3, itemId = 44067 },
+            { itemName = "Branchbearer Fruit", itemIndex = 11, price = 3, itemId = 44065 },
+            { itemName = "Nopalitender Tuna", itemIndex = 12, price = 3, itemId = 44066 },
+            { itemName = "Rroneek Fleece", itemIndex = 13, price = 3, itemId = 44027 },
+            { itemName = "Silver Lobo Hide", itemIndex = 14, price = 3, itemId = 44053 },
+            { itemName = "Hammerhead Crocodile Skin", itemIndex = 15, price = 3, itemId = 44054 },
+            { itemName = "Br'aax Hide", itemIndex = 16, price = 3, itemId = 44055 },
+            { itemName = "Gomphotherium Skin", itemIndex = 17, price = 3, itemId = 44056 },
+            { itemName = "Gargantua Hide", itemIndex = 18, price = 3, itemId = 44057 },
+            { itemName = "Ty'aitya Wingblade", itemIndex = 19, price = 3, itemId = 44070 },
+            { itemName = "Poison Frog Secretions", itemIndex = 20, price = 3, itemId = 44068 },
+            { itemName = "Alexandrian Axe Beak Wing", itemIndex = 21, price = 3, itemId = 44072 },
+            { itemName = "Lesser Apollyon Shell", itemIndex = 22, price = 3, itemId = 44069 },
+            { itemName = "Tumbleclaw Weeds", itemIndex = 23, price = 3, itemId = 44071 },
         }
     }
 }
@@ -4144,6 +4144,8 @@ pcall(function()
 end)
 Dalamud.Log("[FATE Tracker] Script carregado e variáveis iniciais definidas!")
 SessionGemstonesFarmed = 0
+SessionFatesCompleted = 0
+ScriptStartTime = os.time()
 LastFrameGemstoneCount = Inventory.GetItemCount(26807)
 LastGcTime = 0
 yield("/echo [FATE] --------------------------------------------------")
@@ -4195,6 +4197,7 @@ while not StopScript do
     then
         if WaitingForFateRewards ~= nil and WaitingForFateRewards.fateObject.State == FateState.Ended then
             Dalamud.Log("[FATE] FATE ended, clearing WaitingForFateRewards: "..tostring(WaitingForFateRewards.fateId))
+            SessionFatesCompleted = (SessionFatesCompleted or 0) + 1
             WaitingForFateRewards = nil
         end
         State()
@@ -4221,19 +4224,56 @@ while not StopScript do
             end
             
             local gemsFarmed = SessionGemstonesFarmed or 0
+            local walletGems = Inventory.GetItemCount(26807) or 0
+            local fatesDone = SessionFatesCompleted or 0
+            local sessionDurMs = ((os.time() - (ScriptStartTime or os.time())) * 1000)
+            local selectedTrade = ""
+            if ShouldExchangeBicolorGemstones and ItemToPurchase ~= nil then
+                selectedTrade = tostring(ItemToPurchase)
+            end
+            local jobAbbr = ""
+            local charLevel = 0
+            pcall(function()
+                if Player and Player.Job then
+                    jobAbbr = tostring(Player.Job.Abbreviation or Player.Job.Name or "")
+                    charLevel = tonumber(Player.Job.Level) or 0
+                end
+                if charLevel == 0 and pc.Level then
+                    charLevel = tonumber(pc.Level) or 0
+                end
+            end)
+
+            local itemsJsonParts = {}
+            pcall(function()
+                for _, shop in ipairs(BicolorExchangeData) do
+                    for _, item in ipairs(shop.shopItems) do
+                        if item.itemId then
+                            local cnt = Inventory.GetItemCount(item.itemId) or 0
+                            local safeName = string.gsub(item.itemName, '"', '\\"')
+                            table.insert(itemsJsonParts, string.format('{"id":%d,"name":"%s","count":%d,"cost":%d}', item.itemId, safeName, cnt, item.price or 0))
+                        end
+                    end
+                end
+            end)
+            local tradeItemsJson = "[" .. table.concat(itemsJsonParts, ",") .. "]"
+            local safeMap = string.gsub(currentMap, '"', '\\"')
+            local safeTrade = string.gsub(selectedTrade, '"', '\\"')
 
             if playerName and serverName then
+                local jsonBody = string.format(
+                    '{"playerName":"%s","source":"script","version":"3.2.2","serverName":"%s","currentServer":"%s","currentMap":"%s","classJob":"%s","level":%d,"walletGemstones":%d,"gemstonesFarmed":%d,"fatesCompleted":%d,"sessionDurationMs":%d,"selectedTradeItem":"%s","tradeItems":%s}',
+                    playerName, serverName, currentServer, safeMap, jobAbbr, charLevel, walletGems, gemsFarmed, fatesDone, sessionDurMs, safeTrade, tradeItemsJson
+                )
                 -- Try C# HttpClient first, fallback to powershell
                 if GlobalTrackerClient ~= nil and StringContent ~= nil and Encoding ~= nil then
                     local ok, err = pcall(function()
-                        local jsonBody = '{"playerName": "'..playerName..'", "serverName": "'..serverName..'", "currentServer": "'..currentServer..'", "currentMap": "'..currentMap..'", "gemstonesFarmed": '..gemsFarmed..'}'
                         local stringContent = StringContent(jsonBody, Encoding.UTF8, "application/json")
                         GlobalTrackerClient:PostAsync("https://y-kohl-omega.vercel.app/api/track", stringContent)
                     end)
                 else
                     pcall(function()
-                        local jsonBody = '{\\"playerName\\": \\"'..playerName..'\\", \\"serverName\\": \\"'..serverName..'\\", \\"currentServer\\": \\"'..currentServer..'\\", \\"currentMap\\": \\"'..currentMap..'\\", \\"gemstonesFarmed\\": '..gemsFarmed..'}'
-                        local psCmd = 'start /B powershell -WindowStyle Hidden -Command "Invoke-RestMethod -Uri https://y-kohl-omega.vercel.app/api/track -Method Post -Body \''..jsonBody..'\' -ContentType \'application/json\' -UserAgent \'Mozilla/5.0\'"'
+                        local escapedForPs = string.gsub(jsonBody, '"', '\\"')
+                        local psCmd = 'start /B powershell -WindowStyle Hidden -Command "Invoke-RestMethod -Uri https://y-kohl-omega.vercel.app/api/track -Method Post -Body \'' .. escapedForPs .. '\' -ContentType \'application/json\' -UserAgent \'Mozilla/5.0\'"'
                         os.execute(psCmd)
                     end)
                 end
