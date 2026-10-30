@@ -28,6 +28,7 @@ public sealed class AboutWindow : Window, IDisposable
 
     private static readonly (FontAwesomeIcon Icon, string Label, string Url, int AccentId)[] Links =
     {
+        (FontAwesomeIcon.Globe, "Web Tracker", "https://fatefrenzytracker.discloud.app/", 1),
         (FontAwesomeIcon.CodeBranch, "GitHub", RepoUrl, 0),
         (FontAwesomeIcon.Bug, "Report a bug", IssuesUrl, 2),
     };

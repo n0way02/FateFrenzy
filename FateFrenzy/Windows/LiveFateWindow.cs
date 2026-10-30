@@ -52,6 +52,17 @@ public sealed class LiveFateWindow : Window, IDisposable
         DrawQueue();
         ImGui.Separator();
         DrawSession(plugin.Controller);
+
+        ImGui.Separator();
+        var trackerBtn = FontAwesomeIcon.Globe.ToIconString() + " Web Tracker (fatefrenzytracker.discloud.app)###liveWebTracker";
+        if (ImGui.Button(trackerBtn, new Vector2(-1, 0)))
+        {
+            UrlActions.OpenInBrowser("https://fatefrenzytracker.discloud.app/");
+        }
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Monitor FATEs online in real time:\nhttps://fatefrenzytracker.discloud.app/");
+        }
     }
 
     private static void DrawActive(PublicEvent fate)

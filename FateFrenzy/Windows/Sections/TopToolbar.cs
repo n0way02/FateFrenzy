@@ -11,6 +11,7 @@ internal static class TopToolbar
     {
         var anyMissing = !ExternalPlugins.AllRequiredInstalled();
 
+        var webLabel = FontAwesomeIcon.Globe.ToIconString();
         var statsLabel = FontAwesomeIcon.ChartLine.ToIconString();
         var plugLabel = FontAwesomeIcon.Plug.ToIconString();
         var infoLabel = FontAwesomeIcon.InfoCircle.ToIconString();
@@ -21,8 +22,15 @@ internal static class TopToolbar
             btnW = ImGui.CalcTextSize(gearLabel).X + ImGui.GetStyle().FramePadding.X * 2;
 
         var spacingX = ImGui.GetStyle().ItemSpacing.X;
-        ImGui.SameLine(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX() - btnW * 4 - spacingX * 3);
+        ImGui.SameLine(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX() - btnW * 5 - spacingX * 4);
 
+        bool webClicked;
+        using (ImRaii.PushFont(UiBuilder.IconFont))
+        using (ImRaii.PushColor(ImGuiCol.Text, Styling.AccentBlue))
+            webClicked = ImGui.Button(webLabel + "##webtracker");
+        HoverTip("Web Tracker (Monitor FATEs online)\nhttps://fatefrenzytracker.discloud.app/");
+
+        ImGui.SameLine();
         bool statsClicked;
         using (ImRaii.PushFont(UiBuilder.IconFont))
             statsClicked = ImGui.Button(statsLabel + "##history");
@@ -47,6 +55,7 @@ internal static class TopToolbar
             gearClicked = ImGui.Button(gearLabel + "##gear");
         HoverTip("Settings");
 
+        if (webClicked) UrlActions.OpenInBrowser("https://fatefrenzytracker.discloud.app/");
         if (statsClicked) plugin.ToggleHistoryUi();
         if (plugClicked) plugin.ToggleDependenciesUi();
         if (infoClicked) plugin.ToggleAboutUi();

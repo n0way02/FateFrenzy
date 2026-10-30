@@ -14,6 +14,7 @@ internal static class GeneralSettings
         DrawMultiZoneGroup(cfg);
         DrawChocoboGroup(cfg);
         DrawRelicGroup(cfg);
+        DrawWebTrackerGroup();
     }
 
     private static void DrawWindowGroup(Configuration cfg)
@@ -246,6 +247,23 @@ internal static class GeneralSettings
             "Automatically monitors your inventory for Patch 7.25 Relic FATE items (Azurite, Verdigris, Malachite, Realgar, Caput Mortuum, and Orpiment Demiatmas). The plugin will automatically skip maps once you have collected 3 of their corresponding stones, and stop once all selected relic zones are completed.",
             SettingsControls.ToggleWidth,
             () => SettingsControls.DrawToggle(cfg, () => cfg.RelicModeEnabled, v => cfg.RelicModeEnabled = v, "##gen_relic"),
+            SettingsRow.ToggleHeight);
+    }
+
+    private static void DrawWebTrackerGroup()
+    {
+        using var group = SettingsGroup.Begin("Web Tracker");
+
+        SettingsRow.Draw("Online FATE Dashboard",
+            "Monitor your FATEs online in real time from any browser: https://fatefrenzytracker.discloud.app/",
+            SettingsControls.RowComboWidth,
+            () =>
+            {
+                if (ImGui.Button("Open Tracker Website##gen_webtracker", new System.Numerics.Vector2(SettingsControls.RowComboWidth * Dalamud.Interface.Utility.ImGuiHelpers.GlobalScale, 0)))
+                {
+                    UrlActions.OpenInBrowser("https://fatefrenzytracker.discloud.app/");
+                }
+            },
             SettingsRow.ToggleHeight);
     }
 }
