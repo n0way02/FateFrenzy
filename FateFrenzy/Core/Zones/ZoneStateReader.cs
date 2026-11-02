@@ -34,6 +34,9 @@ internal static class ZoneStateReader
         var set = new HashSet<uint>(capacity: 64);
         foreach (var a in Svc.AetheryteList)
             if (a.TerritoryId != 0) set.Add(a.TerritoryId);
+        if (set.Contains(478)) set.Add(399);
+        set.Add(1252);
+        set.Add(1346);
         return set;
     }
 

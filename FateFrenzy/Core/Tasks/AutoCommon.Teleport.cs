@@ -148,6 +148,30 @@ public abstract partial class AutoCommon
     // operation on one slow timeout. Returns true once we are in the target territory.
     internal async Task<bool> TeleportToTerritory(uint territoryId, Vector3 dest, string label, int perAttemptTimeoutMs, int attempts = 4)
     {
+        if (territoryId == 399)
+        {
+            if (Svc.ClientState.TerritoryType == 399) return true;
+
+            Status = "Traveling to The Dravanian Hinterlands (/li prologue gate)";
+            Diag($"Teleporting to The Dravanian Hinterlands (399) via '/li prologue gate'");
+            await PrepareForTeleport($"{label}-hinterlands-gate");
+            if (CancelToken.IsCancellationRequested) return false;
+
+            Chat.ExecuteCommand("/li prologue gate");
+            await DelayMs(1000);
+
+            var start = Environment.TickCount64;
+            while (Environment.TickCount64 - start < 90000 && !CancelToken.IsCancellationRequested)
+            {
+                if (Svc.ClientState.TerritoryType == 399 && !Svc.Condition[ConditionFlag.BetweenAreas] && !Svc.Condition[ConditionFlag.BetweenAreas51] && !LifestreamIPC.IsBusy())
+                {
+                    break;
+                }
+                await DelayMs(500);
+            }
+            await DelayMs(1500);
+            return Svc.ClientState.TerritoryType == 399;
+        }
         if (territoryId == 1252 || territoryId == 1346)
         {
             var crystals = ZoneAetherytes.InTerritory(territoryId);

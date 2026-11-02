@@ -125,7 +125,9 @@ internal static class ZonePicker
         if (disabled && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(controller.Running
                 ? "Stop the runner to change zone selection."
-                : "Locked — attune an aetheryte in this zone first.");
+                : zone.TerritoryId == 399
+                    ? "Locked -- attune to the Idyllshire aetheryte first."
+                    : "Locked -- attune an aetheryte in this zone first.");
 
         ImGui.SameLine();
         var nameColor = zone.Unlocked ? Styling.TextStrong : Styling.TextMuted;
