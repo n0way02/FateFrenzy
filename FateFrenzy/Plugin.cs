@@ -37,6 +37,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly GmAlertWatcher gmAlertWatcher;
     private readonly PartyInviteWatcher partyInviteWatcher;
     private readonly DutyWatcher dutyWatcher;
+    private readonly DiscordChatWatcher discordChatWatcher;
 
     private readonly MainWindow mainWindow;
     private readonly ConfigWindow configWindow;
@@ -66,6 +67,7 @@ public sealed class Plugin : IDalamudPlugin
         gmAlertWatcher = new GmAlertWatcher();
         partyInviteWatcher = new PartyInviteWatcher();
         dutyWatcher = new DutyWatcher();
+        discordChatWatcher = new DiscordChatWatcher();
 
         mainWindow = new MainWindow(this);
         configWindow = new ConfigWindow(this);
@@ -137,6 +139,7 @@ public sealed class Plugin : IDalamudPlugin
         gmAlertWatcher.Dispose();
         partyInviteWatcher.Dispose();
         dutyWatcher.Dispose();
+        discordChatWatcher.Dispose();
 
         CLibMain.Dispose();
         ECommonsMain.Dispose();

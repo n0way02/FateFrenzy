@@ -46,8 +46,9 @@ internal sealed unsafe class PartyInviteWatcher : IDisposable
         if (pending) return;
 
         var cfg = Plugin.Cfg;
-        if (!cfg.DeclinePartyInvites) return;
-        if (!Plugin.Instance.Controller.Running || Plugin.Instance.Controller.Paused) return;
+        var wantDecline = cfg.DeclinePartyInvites && Plugin.Instance.Controller.Running && !Plugin.Instance.Controller.Paused;
+        var wantNotify = cfg.DiscordNotificationsEnabled && cfg.DiscordNotifyOnPartyInvite;
+        if (!wantDecline && !wantNotify) return;
 
         var agent = AgentPartyInvite.Instance();
         if (agent is null) return;
@@ -66,14 +67,22 @@ internal sealed unsafe class PartyInviteWatcher : IDisposable
 
         CaptureInviter();
 
-        var lo = Math.Max(0, cfg.DeclineInviteDelayMinSec);
-        var hi = Math.Max(lo, cfg.DeclineInviteDelayMaxSec);
-        var delayMs = (lo == hi ? lo : rng.Next(lo, hi + 1)) * 1000;
+        if (wantNotify)
+        {
+            FateFrenzy.Core.External.DiscordWebhookService.SendPartyInviteAlert(inviterName, inviterWorld);
+        }
 
-        pending = true;
-        confirmAddonId = addon->Id;
-        declineAtTick = Environment.TickCount64 + delayMs;
-        Svc.Log.Info($"[FateFrenzy] Party invite from {DisplayName()} detected; declining in ~{delayMs / 1000}s.");
+        if (wantDecline)
+        {
+            var lo = Math.Max(0, cfg.DeclineInviteDelayMinSec);
+            var hi = Math.Max(lo, cfg.DeclineInviteDelayMaxSec);
+            var delayMs = (lo == hi ? lo : rng.Next(lo, hi + 1)) * 1000;
+
+            pending = true;
+            confirmAddonId = addon->Id;
+            declineAtTick = Environment.TickCount64 + delayMs;
+            Svc.Log.Info($"[FateFrenzy] Party invite from {DisplayName()} detected; declining in ~{delayMs / 1000}s.");
+        }
     }
 
     private void OnUpdate(IFramework _)

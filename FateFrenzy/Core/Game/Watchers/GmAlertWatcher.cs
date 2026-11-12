@@ -74,12 +74,19 @@ internal sealed class GmAlertWatcher : IDisposable
         || cfg.GmAlertChat
         || cfg.GmAlertSound
         || cfg.GmAlertKillGame
+        || (cfg.DiscordNotificationsEnabled && cfg.DiscordNotifyOnGmAlert)
         || cfg.GmAlertCommands.Count > 0;
 
     private static void FireAlerts(Configuration cfg, IPlayerCharacter gm)
     {
         var name = gm.Name.TextValue;
         Svc.Log.Warning($"[FateFrenzy] GM detected nearby: {name} (OnlineStatus {gm.OnlineStatus.RowId}). Firing GM alert.");
+
+        if (cfg.DiscordNotificationsEnabled && cfg.DiscordNotifyOnGmAlert)
+        {
+            var zone = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(Svc.ClientState.TerritoryType)?.PlaceName.ValueNullable?.Name.ExtractText() ?? "Unknown";
+            FateFrenzy.Core.External.DiscordWebhookService.SendGmAlert(name, zone);
+        }
 
         if (cfg.GmAlertStopRun)
         {

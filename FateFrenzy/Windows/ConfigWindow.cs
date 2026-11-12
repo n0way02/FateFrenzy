@@ -11,7 +11,7 @@ namespace FateFrenzy.Windows;
 
 public sealed class ConfigWindow : Window, IDisposable
 {
-    private enum Tab { General, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert, Vouchers }
+    private enum Tab { General, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert, Vouchers, Discord }
 
     private readonly Plugin plugin;
     private Tab activeTab = Tab.General;
@@ -59,6 +59,7 @@ public sealed class ConfigWindow : Window, IDisposable
         if (SidebarTab.Draw("Party invites", FontAwesomeIcon.UserSlash, Styling.AccentViolet, activeTab == Tab.PartyInvites)) activeTab = Tab.PartyInvites;
         if (SidebarTab.Draw("GM alert",     FontAwesomeIcon.UserSecret, Styling.AccentViolet, activeTab == Tab.GmAlert))   activeTab = Tab.GmAlert;
         if (SidebarTab.Draw("Voucher & Mount", FontAwesomeIcon.Store,   Styling.AccentViolet, activeTab == Tab.Vouchers))  activeTab = Tab.Vouchers;
+        if (SidebarTab.Draw("Discord alerts", FontAwesomeIcon.Bell,     Styling.AccentViolet, activeTab == Tab.Discord))   activeTab = Tab.Discord;
     }
 
     private void DrawContent(Configuration cfg)
@@ -76,6 +77,7 @@ public sealed class ConfigWindow : Window, IDisposable
             case Tab.PartyInvites: DrawHeader("Party invites", "Auto-decline incoming party invites during a run, after a human-like delay, with an optional reply."); PartyInviteSettings.Draw(cfg); break;
             case Tab.GmAlert:   DrawHeader("GM alert",  "Detects nearby Game Masters and reacts — stop the bot, ping you, or take more drastic action.");  GmAlertSettings.Draw(cfg); break;
             case Tab.Vouchers:  DrawHeader("Voucher & Mount", "Multi-account voucher exchange, mount buying, and Retainer Market Board seller."); VoucherMountSettings.Draw(cfg); break;
+            case Tab.Discord:   DrawHeader("Discord alerts", "Instant webhook alerts for whispers, party invites, GM presence, and completion goals."); DiscordSettings.Draw(cfg); break;
         }
     }
 

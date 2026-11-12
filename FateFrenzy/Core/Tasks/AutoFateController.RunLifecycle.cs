@@ -82,6 +82,15 @@ internal sealed partial class AutoFateController
             };
             Plugin.Instance.History.Append(record);
             Diag($"Run recorded to history: {record.FatesCompleted} FATEs, {record.GemstonesEarned}g, {record.ExpEarned} exp over {record.Duration}.");
+
+            if (s.CompletedByStopCondition)
+            {
+                DiscordWebhookService.SendGoalReachedAlert(Plugin.Cfg.ActiveMode.DisplayName, record.GemstonesEarned, record.FatesCompleted, record.Duration);
+            }
+            else
+            {
+                DiscordWebhookService.SendRunStoppedAlert("Grind session ended");
+            }
         }
         catch (Exception ex)
         {

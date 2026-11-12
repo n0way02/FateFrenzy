@@ -153,6 +153,15 @@ public sealed class Configuration : IPluginConfiguration
     public int MountRetainerIndex { get; set; } = 0;
     public bool MountUsePrivateInn { get; set; } = true;
 
+    // Discord Webhook Notifications
+    public bool DiscordNotificationsEnabled { get; set; } = false;
+    public string DiscordWebhookUrl { get; set; } = "";
+    public bool DiscordNotifyOnTell { get; set; } = true;
+    public bool DiscordNotifyOnPartyInvite { get; set; } = true;
+    public bool DiscordNotifyOnGmAlert { get; set; } = true;
+    public bool DiscordNotifyOnGoalReached { get; set; } = true;
+    public bool DiscordNotifyOnRunStopped { get; set; } = false;
+
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
 
     public void SaveDebounced()
