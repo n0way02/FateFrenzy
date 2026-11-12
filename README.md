@@ -1,60 +1,98 @@
 # FateFrenzy ⚡
 
 [![License: AGPL 3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
-[![Dalamud: API 14](https://img.shields.io/badge/Dalamud-API%2014-blue.svg)](https://dalamud.dev/)
+[![Dalamud: API 15](https://img.shields.io/badge/Dalamud-API%2015-blue.svg)](https://dalamud.dev/)
+[![Web Tracker](https://img.shields.io/badge/Web%20Tracker-Online-green.svg)](https://fatefrenzytracker.discloud.app/)
+[![Ko-fi Support](https://img.shields.io/badge/Support%20me-Ko--fi-ff5e5b.svg)](https://ko-fi.com/n0way02)
 
-**FateFrenzy** is an advanced, fully-automated FATE farming plugin for Final Fantasy XIV (Dalamud). It features a modern, custom-designed Holographic Neon Cyan user interface that coordinates movement, combat, instances, and cross-server world hops in a unified, hands-off loop.
-
----
-
-## Key Features 🚀
-
-### 🤖 Intelligent FATE Farming
-- **Auto-Navigation & Combat**: Automatically teleports to active FATEs, paths to objectives using `vnavmesh`, auto-targets combatants, syncs level, and engages.
-- **Multiclass Queue**: Automatically switches gearsets on startup and advances to the next class in your queue when one hits its level cap.
-
-### 🌌 Dynamic Server & Instance Rotation
-- **Instance Hopping**: Automatically switches instances (Instance 1, 2, 3) inside a zone if no eligible FATEs are active.
-- **World Rotation**: Teleports to other servers on your data center using `Lifestream` when all FATEs in your zone rotation are cleared, waiting just 10 seconds of idle time.
-
-### 🐦 Automated Chocobo Companion System
-- **Chocobo Summoning**: Monitors companion timer and automatically summons your chocobo out of combat.
-- **Auto-Restock (Gysahl Greens)**: Teleports to Limsa Lominsa Lower Decks when out of Gysahl Greens, paths to Bango Zango, purchases 99 greens, closes the merchant interface, and teleports back to continue farming.
-
-### 💎 Bicolor Gemstone Auto-Trading
-- **Voucher & Item Purchases**: Automatically teleports to Bicolor Gemstone merchants and purchases vouchers or items when your wallet hits a custom threshold.
-- **Smart Reserves**: Allows you to configure a gemstone reserve to keep in your wallet.
-
-### 🛠️ Logistics & Humanizer
-- **Auto-Repair**: Repairs gear automatically using Dark Matter or by visiting a repair NPC when durability drops below your threshold.
-- **Consumable Upkeep**: Automatically eats food and drinks potions to maintain experience buffs.
-- **Humanizer Breaks**: Simulates human breaks by occasionally taking you to random city hubs to wander around before resuming.
-- **Party Invite Decliner**: Automatically declines incoming party invites after a random delay.
-- **GM Alert System**: Detects nearby Game Masters and triggers custom reactions (sound alerts, stopping the bot, or immediate client termination).
+**FateFrenzy** is the most advanced, fully automated, and feature-rich FATE farming plugin for Final Fantasy XIV (Dalamud). Designed with a sleek Cyberpunk / Holographic Neon interface, it coordinates pathfinding, combat rotations, cross-instance hops, data-center world travel, multi-account voucher exchanges, Retainer market listing, and live web/Discord telemetry in a unified, 100% hands-off loop.
 
 ---
 
-## Required Plugins (Dependencies) 📦
+## 🌐 Live Web Tracker (Monitor FATEs Online)
 
-For FateFrenzy to operate fully, you should have the following Dalamud plugins installed:
-1. **vnavmesh**: Handles 3D mesh navigation and pathfinding.
-2. **BossMod** or **RotationSolver**: Handles active combat rotations and positioning.
-3. **Lifestream**: Required for changing instances and executing world rotations.
-4. **TextAdvance**: Handles dialogue progression and auto-skipping during merchant interactions.
+FateFrenzy features an official companion web platform where you can track all your farming characters from anywhere (PC, tablet, or phone):
+
+👉 **[https://fatefrenzytracker.discloud.app/](https://fatefrenzytracker.discloud.app/)**
+
+* **Live Telemetry & GPS:** Real-time character coordinates, active zone, current instance, and target FATE progress.
+* **Wallet & Stock Monitor:** Live count of Bicolor Gemstones, Bicolor Gemstone Vouchers, and special inventory items.
+* **Daily & All-time Stats:** Track FATEs completed, gemstones earned today, and total active farming hours.
+* **Lodestone Account Verification:** Link your characters safely and privately through official Lodestone bio verification.
+* **Bilingual UI:** Full support for both English (🇺🇸) and Portuguese (🇧🇷).
+* **One-Click Access:** Open the web tracker directly from the in-game FateFrenzy toolbar (Globe icon 🌐).
 
 ---
 
-## Installation & Commands ⚙️
+## 🔔 Discord Webhook Alerts & Notifications
+
+Never worry while AFK! FateFrenzy can send rich, instantaneous Discord webhook notifications directly to your private server or channel:
+
+* 📩 **Incoming Whispers (`/tell`):** Receive instant alerts containing the sender's character name, home world server, and the full message content.
+* 💌 **Party Invites:** Get alerted when another player invites you to a party, showing their name, server, and whether auto-decline is handling it.
+* 🚨 **Game Master (GM) Alerts:** Immediate red-flag urgency alert if a Game Master is detected nearby in your zone.
+* 🏆 **Goal Completed:** Comprehensive run summary when your target gemstone count, FATE quota, or mount voucher threshold is reached.
+* ⏹️ **Session Interrupted:** Notification if the bot stops due to disconnected state or blockers.
+* 🔒 **Active Only While Farming:** Discord alerts automatically turn on when you click **Start** and sleep when you **Stop**, ensuring you never receive spam during manual gameplay.
+* ⚡ **Test Webhook Button:** Easily verify your Discord connection with one click in the plugin settings.
+
+---
+
+## 🚀 Key Features
+
+### 🤖 Intelligent FATE Farming & Pathfinding
+* **Full Expansion Coverage:** Supports Dawntrail, Endwalker, Shadowbringers, Stormblood, Heavensward, and A Realm Reborn zones.
+* **Smart Travel & Secret Pathing:** Automatic aetheryte teleportation, including special navigation for tricky maps without a native aetheryte (e.g. *The Dravanian Hinterlands* navigated seamlessly via Idyllshire's Prologue Gate).
+* **Combat & Position Sync:** Automatic 3D navigation using `vnavmesh`, target selection, level synchronization, and rotation coordination with `RotationSolver` or `BossMod`.
+* **Multi-Class Queue:** Configure gearsets to level multiple jobs back-to-back; the bot automatically swaps to the next class in your queue once the current one hits its level cap.
+
+### 🌌 Server & Instance Hopping
+* **Instance Rotation:** Intelligently switches between instances (Instance 1, 2, 3) inside a zone if no eligible FATEs remain active.
+* **Cross-World Rotation:** Uses `Lifestream` to travel across servers in your Data Center when all FATEs in your zone rotation are cleared.
+
+### 🎫 Automated Mount Exchange & Retainer Market Seller
+* **Multi-Account / Solo Voucher Trading:** Coordinates voucher handoffs between farmer characters and a buyer character in Mor Dhona.
+* **Ty'aitya Whistle Exchange:** Automatically walks to Edelina in Mor Dhona and trades 500 Turali Bicolor Gemstone Vouchers for the rare **Ty'aitya Whistle** mount.
+* **Automated Market Board Seller:** Travels to your Home World, enters a Private Inn room, summons your Retainer, scans current market board pricing, undercuts competitors by 1 gil, and lists the mount for sale automatically!
+
+### 🐦 Companion Chocobo Automation
+* **Chocobo Summoning:** Automatically summons your chocobo companion out of combat and maintains your preferred stance (Healer, Attacker, Defender, Free).
+* **Auto-Restock Gysahl Greens:** Automatically travels to Limsa Lominsa Lower Decks (Bango Zango) to restock 99 Gysahl Greens when running low, then teleports back to resume farming.
+
+### 💎 Bicolor Gemstone Auto-Trader
+* **Automated Vendor Purchases:** Visits local Gemstone Traders to buy vouchers, crafting materials, or trade goods when your wallet reaches your configured threshold (e.g. 1500 cap).
+* **Smart Wallet Reserve:** Keeps a safety reserve of gemstones for manual purchases.
+
+### 🛡️ Logistics, Security & Humanizer
+* **Auto-Repair:** Repairs equipped gear using Dark Matter or visits repair NPCs when item durability drops below your threshold.
+* **Consumables Upkeep:** Automatically consumes food (+3% EXP) and medicine buffs on cooldown.
+* **Humanizer Breaks:** Periodically teleports to random major city hubs to wander around naturally before returning to the grind.
+* **Auto-Decline Party Invites:** Humanized delays before dismissing incoming party invites, with optional auto-reply via `/tell`, `/say`, or `/yell`.
+* **GM Alert Watcher:** Detects nearby Game Masters and triggers custom reactions (sound beeps, chat warnings, stopping automation, or client termination).
+
+---
+
+## 📦 Required Plugins (Dependencies)
+
+Install these plugins via Dalamud to enable full functionality:
+1. **vnavmesh**: 3D mesh navigation and pathfinding.
+2. **BossMod** / **BossModReborn** or **RotationSolver**: Combat execution, dodging, and positioning.
+3. **Lifestream**: Changing instances, local aetherytes, and cross-world data-center visits.
+4. **TextAdvance**: Skipping dialogue during vendor purchases, repair, and retainer interactions.
+
+---
+
+## ⚙️ Installation
 
 ### Method 1: Custom Plugin Repository (Recommended) ⭐
 
-1. In-game, open Dalamud Settings by typing `/xlsettings` in the chat.
-2. Navigate to the **Experimental** tab.
-3. Scroll down to **Custom Plugin Repositories**, paste the following URL into the box:
+1. Open Dalamud Settings in-game by typing `/xlsettings` in chat.
+2. Go to the **Experimental** tab.
+3. Under **Custom Plugin Repositories**, add this URL:
    ```
    https://raw.githubusercontent.com/n0way02/FateFrenzy/main/repo/pluginmaster.json
    ```
-4. Click the **+** (Add) button and then click **Save and Close** at the bottom right.
+4. Click **+** (Add), then click **Save and Close**.
 5. Open the Plugin Installer with `/xlplugins`.
 6. Search for **FateFrenzy** and click **Install**!
 
@@ -62,8 +100,11 @@ For FateFrenzy to operate fully, you should have the following Dalamud plugins i
 
 ### Method 2: Manual / Developer Build 🛠️
 
-1. Clone or download this repository.
-2. Compile the project in Release configuration:
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/n0way02/FateFrenzy.git
+   ```
+2. Build in Release mode:
    ```bash
    dotnet build -c Release
    ```
@@ -71,22 +112,34 @@ For FateFrenzy to operate fully, you should have the following Dalamud plugins i
 
 ---
 
-### Commands 💬
+## 💬 Commands
 
-- `/fatefrenzy` (or `/ff`) — Open the primary FateFrenzy dashboard.
-- `/ff config` — Open configuration settings.
-- `/ff stats` — Open run history and statistics.
-- `/ff deps` — Open dependency checker.
-- `/ff pause` — Pause or resume the active farming loop.
-
----
-
-## Credits & Source 📝
-This project is a modified fork of the original **FFXIV-AutoFATEGrind** plugin developed by [XeldarAlz](https://github.com/XeldarAlz).
-- Original Repository: [XeldarAlz/FFXIV-AutoFATEGrind](https://github.com/XeldarAlz/FFXIV-AutoFATEGrind)
-- In compliance with the copyleft terms of the **AGPL-3.0-or-later** license, this repository is open-source and publicly accessible.
+| Command | Description |
+| :--- | :--- |
+| `/fatefrenzy` or `/ff` | Open the main FateFrenzy window |
+| `/ff config` | Open Settings & Configurations |
+| `/ff stats` | Open Run History and Statistics |
+| `/ff deps` | Open Dependency Manager |
+| `/ff pause` | Pause or Resume active farming |
+| `/ff target` | Print debug information for currently targeted NPC or FATE |
 
 ---
 
-## License 📄
-This project is licensed under the AGPL-3.0-or-later License.
+## 💖 Support the Project
+
+If FateFrenzy saves you time and brings you value, consider showing your support! Your contributions help maintain updates, add new features, and host the telemetry web infrastructure:
+
+☕ **Support on Ko-fi:** [https://ko-fi.com/n0way02](https://ko-fi.com/n0way02)
+
+---
+
+## 📝 Credits & Source
+
+This project is built and maintained by **n0way02**.
+* Originally derived from **FFXIV-AutoFATEGrind** by [XeldarAlz](https://github.com/XeldarAlz/FFXIV-AutoFATEGrind).
+* In compliance with the copyleft terms of the **AGPL-3.0-or-later** license, this repository is open-source and publicly accessible.
+
+---
+
+## 📄 License
+This project is licensed under the [AGPL-3.0-or-later License](LICENSE).
