@@ -11,6 +11,7 @@ internal static class TopToolbar
     {
         var anyMissing = !ExternalPlugins.AllRequiredInstalled();
 
+        var supportLabel = FontAwesomeIcon.Heart.ToIconString();
         var webLabel = FontAwesomeIcon.Globe.ToIconString();
         var statsLabel = FontAwesomeIcon.ChartLine.ToIconString();
         var plugLabel = FontAwesomeIcon.Plug.ToIconString();
@@ -22,8 +23,15 @@ internal static class TopToolbar
             btnW = ImGui.CalcTextSize(gearLabel).X + ImGui.GetStyle().FramePadding.X * 2;
 
         var spacingX = ImGui.GetStyle().ItemSpacing.X;
-        ImGui.SameLine(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX() - btnW * 5 - spacingX * 4);
+        ImGui.SameLine(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX() - btnW * 6 - spacingX * 5);
 
+        bool supportClicked;
+        using (ImRaii.PushFont(UiBuilder.IconFont))
+        using (ImRaii.PushColor(ImGuiCol.Text, Styling.AccentRose))
+            supportClicked = ImGui.Button(supportLabel + "##support");
+        HoverTip("Support me on Ko-fi\nhttps://ko-fi.com/n0way02");
+
+        ImGui.SameLine();
         bool webClicked;
         using (ImRaii.PushFont(UiBuilder.IconFont))
         using (ImRaii.PushColor(ImGuiCol.Text, Styling.AccentBlue))
@@ -55,6 +63,7 @@ internal static class TopToolbar
             gearClicked = ImGui.Button(gearLabel + "##gear");
         HoverTip("Settings");
 
+        if (supportClicked) UrlActions.OpenInBrowser("https://ko-fi.com/n0way02");
         if (webClicked) UrlActions.OpenInBrowser("https://fatefrenzytracker.discloud.app/");
         if (statsClicked) plugin.ToggleHistoryUi();
         if (plugClicked) plugin.ToggleDependenciesUi();
