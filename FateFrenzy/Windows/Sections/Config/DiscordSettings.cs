@@ -14,6 +14,7 @@ internal static class DiscordSettings
     private static string testStatus = string.Empty;
     private static bool isTesting = false;
     private static Vector4 testStatusColor = Styling.AccentMint;
+    private static long testStatusExpireTick = 0;
 
     public static void Draw(Configuration cfg)
     {
@@ -63,20 +64,37 @@ internal static class DiscordSettings
                         isTesting = true;
                         testStatus = "Sending test message...";
                         testStatusColor = Styling.AccentAmber;
+                        testStatusExpireTick = Environment.TickCount64 + 10000;
+
+                        // Safely capture character info on the main UI thread
+                        var (charName, charWorld) = DiscordWebhookService.GetLocalPlayerInfo();
+                        var targetUrl = (cfg.DiscordWebhookUrl ?? string.Empty).Trim();
 
                         _ = Task.Run(async () =>
                         {
-                            var (ok, err) = await DiscordWebhookService.SendTestMessageAsync(cfg.DiscordWebhookUrl ?? string.Empty);
-                            isTesting = false;
-                            if (ok)
+                            try
                             {
-                                testStatus = "Success! Test alert received in Discord.";
-                                testStatusColor = Styling.AccentMint;
+                                var (ok, err) = await DiscordWebhookService.SendTestMessageAsync(targetUrl, charName, charWorld);
+                                if (ok)
+                                {
+                                    testStatus = "Success! Test alert received in Discord.";
+                                    testStatusColor = Styling.AccentMint;
+                                }
+                                else
+                                {
+                                    testStatus = $"Failed: {err}";
+                                    testStatusColor = Styling.AccentRose;
+                                }
                             }
-                            else
+                            catch (Exception ex)
                             {
-                                testStatus = $"Failed: {err}";
+                                testStatus = $"Error: {ex.Message}";
                                 testStatusColor = Styling.AccentRose;
+                            }
+                            finally
+                            {
+                                isTesting = false;
+                                testStatusExpireTick = Environment.TickCount64 + 5000;
                             }
                         });
                     }
@@ -84,8 +102,15 @@ internal static class DiscordSettings
 
                 if (!string.IsNullOrEmpty(testStatus))
                 {
-                    using (ImRaii.PushColor(ImGuiCol.Text, testStatusColor))
-                        ImGui.TextUnformatted(testStatus);
+                    if (Environment.TickCount64 > testStatusExpireTick && !isTesting)
+                    {
+                        testStatus = string.Empty;
+                    }
+                    else
+                    {
+                        using (ImRaii.PushColor(ImGuiCol.Text, testStatusColor))
+                            ImGui.TextUnformatted(testStatus);
+                    }
                 }
             });
     }

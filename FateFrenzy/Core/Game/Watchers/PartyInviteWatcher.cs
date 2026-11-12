@@ -46,7 +46,8 @@ internal sealed unsafe class PartyInviteWatcher : IDisposable
         if (pending) return;
 
         var cfg = Plugin.Cfg;
-        var wantDecline = cfg.DeclinePartyInvites && Plugin.Instance.Controller.Running && !Plugin.Instance.Controller.Paused;
+        if (!Plugin.Instance.Controller.Running || Plugin.Instance.Controller.Paused) return;
+        var wantDecline = cfg.DeclinePartyInvites;
         var wantNotify = cfg.DiscordNotificationsEnabled && cfg.DiscordNotifyOnPartyInvite;
         if (!wantDecline && !wantNotify) return;
 

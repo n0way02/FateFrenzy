@@ -25,6 +25,7 @@ internal sealed class DiscordChatWatcher : IDisposable
 
         var cfg = Plugin.Cfg;
         if (!cfg.DiscordNotificationsEnabled || !cfg.DiscordNotifyOnTell) return;
+        if (!Plugin.Instance.Controller.Running) return;
 
         string senderName = "";
         string senderWorld = "";

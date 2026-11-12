@@ -78,7 +78,7 @@ internal static class DiscordWebhookService
         });
     }
 
-    private static (string name, string world) GetLocalPlayerInfo()
+    public static (string name, string world) GetLocalPlayerInfo()
     {
         var player = Svc.Objects.LocalPlayer;
         if (player is null) return ("Unknown", "Unknown");
@@ -90,6 +90,7 @@ internal static class DiscordWebhookService
     public static void SendTellAlert(string senderName, string senderWorld, string message)
     {
         var cfg = Plugin.Cfg;
+        if (!Plugin.Instance.Controller.Running) return;
         if (!cfg.DiscordNotificationsEnabled || !cfg.DiscordNotifyOnTell) return;
         var (localName, localWorld) = GetLocalPlayerInfo();
 
@@ -112,6 +113,7 @@ internal static class DiscordWebhookService
     public static void SendPartyInviteAlert(string inviterName, string inviterWorld)
     {
         var cfg = Plugin.Cfg;
+        if (!Plugin.Instance.Controller.Running) return;
         if (!cfg.DiscordNotificationsEnabled || !cfg.DiscordNotifyOnPartyInvite) return;
         var (localName, localWorld) = GetLocalPlayerInfo();
 
@@ -134,6 +136,7 @@ internal static class DiscordWebhookService
     public static void SendGmAlert(string gmName, string zoneName)
     {
         var cfg = Plugin.Cfg;
+        if (!Plugin.Instance.Controller.Running) return;
         if (!cfg.DiscordNotificationsEnabled || !cfg.DiscordNotifyOnGmAlert) return;
         var (localName, localWorld) = GetLocalPlayerInfo();
 
@@ -189,9 +192,16 @@ internal static class DiscordWebhookService
         });
     }
 
-    public static async Task<(bool success, string error)> SendTestMessageAsync(string webhookUrl)
+    public static async Task<(bool success, string error)> SendTestMessageAsync(string webhookUrl, string? charName = null, string? charWorld = null)
     {
-        var (localName, localWorld) = GetLocalPlayerInfo();
+        string localName = charName ?? "Unknown";
+        string localWorld = charWorld ?? "Unknown";
+
+        if (string.IsNullOrEmpty(charName))
+        {
+            try { (localName, localWorld) = GetLocalPlayerInfo(); } catch { }
+        }
+
         var fields = new List<(string, string, bool)>
         {
             ("Status", "Connected & Operational ✅", true),
@@ -199,6 +209,6 @@ internal static class DiscordWebhookService
             ("Plugin Version", "FateFrenzy", true)
         };
 
-        return await SendEmbedAsync(webhookUrl, "🔔 FateFrenzy Discord Alerts Configured!", "Your Discord webhook is working properly. You will receive notifications based on your chosen settings.", 0x06B6D4, fields);
+        return await SendEmbedAsync(webhookUrl, "🔔 FateFrenzy Discord Alerts Configured!", "Your Discord webhook is working properly. You will receive notifications while grinding is active.", 0x06B6D4, fields);
     }
 }
