@@ -59,6 +59,9 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool AutoResumeAfterDisconnect { get; set; } = true;
     public bool WasRunningBeforeDisconnect { get; set; } = false;
+    public bool AutoReloginOnDisconnect { get; set; } = false;
+    public bool AutoLoginOnLaunch { get; set; } = false;
+    public int AutoLoginCharacterSlot { get; set; } = 0;
 
     public bool AutoPauseInContent { get; set; } = true;
 

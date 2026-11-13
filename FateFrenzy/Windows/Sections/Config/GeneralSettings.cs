@@ -60,6 +60,29 @@ internal static class GeneralSettings
             () => SettingsControls.DrawToggle(cfg, () => cfg.AutoResumeOnFault, v => cfg.AutoResumeOnFault = v, "##gen_autoresume"),
             SettingsRow.ToggleHeight);
 
+        SettingsRow.Draw("Auto-relogin on disconnect",
+            "Automatically dismiss disconnect error popups, click Start on the Title Screen, and log back into your character when disconnected.",
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.AutoReloginOnDisconnect, v => cfg.AutoReloginOnDisconnect = v, "##gen_autorelogin_dc"),
+            SettingsRow.ToggleHeight);
+
+        SettingsRow.Draw("Auto-login on game launch",
+            "Automatically log into your character when the game launches at the Title Screen. Combined with 'Auto-resume after disconnect', FATEs will start automatically.",
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.AutoLoginOnLaunch, v => cfg.AutoLoginOnLaunch = v, "##gen_autologin_launch"),
+            SettingsRow.ToggleHeight);
+
+        if (cfg.AutoReloginOnDisconnect || cfg.AutoLoginOnLaunch)
+        {
+            SettingsRow.Draw("Character slot",
+                "Character slot (1 to 8) to log into on the Character Select screen. On disconnect relogin, FateFrenzy prioritizes the exact character that disconnected.",
+                SettingsControls.RowSliderWidth,
+                () => SettingsControls.DrawIntSlider(cfg, "##gen_autologin_slot",
+                    () => cfg.AutoLoginCharacterSlot + 1,
+                    v => cfg.AutoLoginCharacterSlot = Math.Clamp(v - 1, 0, 7),
+                    1, 8, "Slot %d"));
+        }
+
         SettingsRow.Draw("Auto-resume after disconnect",
             "Automatically dismiss FFXIV disconnect error popups to return to the Title Screen, and automatically resume grinding once you log back in (requires EasyLogin/AutoLogin or XIVLauncher Auto-Login).",
             SettingsControls.ToggleWidth,
