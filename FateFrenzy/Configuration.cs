@@ -61,7 +61,8 @@ public sealed class Configuration : IPluginConfiguration
     public bool WasRunningBeforeDisconnect { get; set; } = false;
     public bool AutoReloginOnDisconnect { get; set; } = false;
     public bool AutoLoginOnLaunch { get; set; } = false;
-    public int AutoLoginCharacterSlot { get; set; } = 0;
+    public string AutoLoginWorldName { get; set; } = "";
+    public string AutoLoginCharacterName { get; set; } = "";
 
     public bool AutoPauseInContent { get; set; } = true;
 

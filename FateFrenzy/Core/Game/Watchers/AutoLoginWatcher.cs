@@ -1,6 +1,7 @@
 using Dalamud.Plugin.Services;
 using ECommons;
 using ECommons.DalamudServices;
+using ECommons.ExcelServices;
 using ECommons.UIHelpers.AddonMasterImplementations;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
@@ -14,12 +15,13 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
     private const long ActionCooldownMs = 1500;
 
     private long nextActionTick = 0;
+    private long nextWorldSwitchTick = 0;
     private bool wasLoggedIn = false;
     private bool hasLoggedInOnceThisLaunch = false;
     private bool pendingReloginFromDisconnect = false;
 
     private string lastCharName = string.Empty;
-    private uint lastCharHomeWorld = 0;
+    private string lastCharWorld = string.Empty;
 
     public AutoLoginWatcher()
     {
@@ -48,7 +50,7 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
             if (player is not null)
             {
                 lastCharName = player.Name.TextValue;
-                lastCharHomeWorld = player.HomeWorld.RowId;
+                lastCharWorld = player.HomeWorld.ValueNullable?.Name.ExtractText() ?? string.Empty;
             }
             return;
         }
@@ -95,6 +97,14 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
         if (string.IsNullOrEmpty(text)) return false;
         return text.Contains("queue", StringComparison.OrdinalIgnoreCase)
             || text.Contains("fila", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private (string name, string world) ResolveTargetCharacter(Configuration cfg)
+    {
+        if (pendingReloginFromDisconnect && !string.IsNullOrEmpty(lastCharName))
+            return (lastCharName, lastCharWorld);
+
+        return (cfg.AutoLoginCharacterName?.Trim() ?? string.Empty, cfg.AutoLoginWorldName?.Trim() ?? string.Empty);
     }
 
     private void TryAdvanceLogin(Configuration cfg, long now)
@@ -148,21 +158,52 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
                 return;
             }
 
-            // 4. Character Select List: select and log in
+            var (targetName, targetWorld) = ResolveTargetCharacter(cfg);
+
+            // 4. World Selection popup (_CharaSelectWorldServer)
+            if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("_CharaSelectWorldServer", out var worldAddon) && GenericHelpers.IsAddonReady(worldAddon))
+            {
+                if (!string.IsNullOrEmpty(targetWorld))
+                {
+                    var worldMenu = new AddonMaster._CharaSelectWorldServer(worldAddon);
+                    var match = worldMenu.Worlds.FirstOrDefault(w => w.Name.Equals(targetWorld, StringComparison.OrdinalIgnoreCase));
+                    if (match is not null)
+                    {
+                        Svc.Log.Info($"[FateFrenzy] AutoLogin: selecting world {match.Name}.");
+                        match.Select();
+                        nextActionTick = now + 2000;
+                        return;
+                    }
+                    Svc.Log.Warning($"[FateFrenzy] AutoLogin: configured world '{targetWorld}' not found in world list.");
+                }
+                return;
+            }
+
+            // 5. Character Select List: select and log in
             if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("_CharaSelectListMenu", out var charaAddon) && GenericHelpers.IsAddonReady(charaAddon))
             {
                 var menu = new AddonMaster._CharaSelectListMenu(charaAddon);
                 if (menu.TemporarilyLocked) return;
 
                 var chars = menu.Characters;
-                if (chars.Length == 0) return;
+                var target = FindCharacter(chars, targetName, targetWorld);
 
-                var target = PickTargetCharacter(chars, cfg);
-                if (target is null) return;
+                if (target is null)
+                {
+                    // If character not on currently displayed world and user specified a world, switch worlds
+                    if (!string.IsNullOrEmpty(targetWorld) && now >= nextWorldSwitchTick)
+                    {
+                        Svc.Log.Info($"[FateFrenzy] AutoLogin: '{targetName}' not on current world list; opening World selection for {targetWorld}.");
+                        menu.World();
+                        nextWorldSwitchTick = now + 4000;
+                        nextActionTick = now + 1500;
+                    }
+                    return;
+                }
 
                 if (!target.IsSelected)
                 {
-                    Svc.Log.Info($"[FateFrenzy] AutoLogin: selecting character {target.Name}.");
+                    Svc.Log.Info($"[FateFrenzy] AutoLogin: selecting character {target.Name} ({ExcelWorldHelper.GetName(target.HomeWorld)}).");
                     target.Select();
                     nextActionTick = now + 1000;
                     return;
@@ -183,20 +224,37 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
         }
     }
 
-    private AddonMaster._CharaSelectListMenu.Character? PickTargetCharacter(AddonMaster._CharaSelectListMenu.Character[] chars, Configuration cfg)
+    private static AddonMaster._CharaSelectListMenu.Character? FindCharacter(
+        AddonMaster._CharaSelectListMenu.Character[] chars,
+        string targetName,
+        string targetWorld)
     {
-        // On disconnect relogin, prefer the exact character that was logged in
-        if (pendingReloginFromDisconnect && !string.IsNullOrEmpty(lastCharName))
-        {
-            var match = chars.FirstOrDefault(c =>
-                c.Name.Equals(lastCharName, StringComparison.OrdinalIgnoreCase) &&
-                (lastCharHomeWorld == 0 || c.HomeWorld == lastCharHomeWorld));
+        if (chars.Length == 0) return null;
 
-            if (match is not null)
-                return match;
+        if (!string.IsNullOrEmpty(targetName))
+        {
+            foreach (var c in chars)
+            {
+                if (!c.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.IsNullOrEmpty(targetWorld))
+                {
+                    var homeName = ExcelWorldHelper.GetName(c.HomeWorld);
+                    if (!homeName.Equals(targetWorld, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+                return c;
+            }
+            return null;
         }
 
-        var idx = Math.Clamp(cfg.AutoLoginCharacterSlot, 0, chars.Length - 1);
-        return chars[idx];
+        // If no character name specified, fall back to first character on the current world
+        if (!string.IsNullOrEmpty(targetWorld))
+        {
+            var firstOnWorld = chars.FirstOrDefault(c =>
+                ExcelWorldHelper.GetName(c.HomeWorld).Equals(targetWorld, StringComparison.OrdinalIgnoreCase));
+            return firstOnWorld;
+        }
+
+        return chars[0];
     }
 }

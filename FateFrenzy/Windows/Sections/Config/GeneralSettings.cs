@@ -1,5 +1,6 @@
 using FateFrenzy.Windows.Components;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
 using System;
 
 namespace FateFrenzy.Windows.Sections.Config;
@@ -74,13 +75,40 @@ internal static class GeneralSettings
 
         if (cfg.AutoReloginOnDisconnect || cfg.AutoLoginOnLaunch)
         {
-            SettingsRow.Draw("Character slot",
-                "Character slot (1 to 8) to log into on the Character Select screen. On disconnect relogin, FateFrenzy prioritizes the exact character that disconnected.",
-                SettingsControls.RowSliderWidth,
-                () => SettingsControls.DrawIntSlider(cfg, "##gen_autologin_slot",
-                    () => cfg.AutoLoginCharacterSlot + 1,
-                    v => cfg.AutoLoginCharacterSlot = Math.Clamp(v - 1, 0, 7),
-                    1, 8, "Slot %d"));
+            SettingsRow.DrawBlock("Target character & server",
+                "Server and character name to log into on launch (or fallback after disconnect). On disconnect relogin, FateFrenzy also prioritizes the exact character that was logged in.",
+                () =>
+                {
+                    var scale = ImGuiHelpers.GlobalScale;
+                    var world = cfg.AutoLoginWorldName ?? string.Empty;
+                    ImGui.SetNextItemWidth(150f * scale);
+                    if (ImGui.InputTextWithHint("##gen_autologin_world", "Server (e.g. Behemoth)", ref world, 64))
+                    {
+                        cfg.AutoLoginWorldName = world;
+                        cfg.SaveDebounced();
+                    }
+
+                    ImGui.SameLine();
+                    var charName = cfg.AutoLoginCharacterName ?? string.Empty;
+                    ImGui.SetNextItemWidth(200f * scale);
+                    if (ImGui.InputTextWithHint("##gen_autologin_char", "Character Name", ref charName, 64))
+                    {
+                        cfg.AutoLoginCharacterName = charName;
+                        cfg.SaveDebounced();
+                    }
+
+                    var local = ECommons.DalamudServices.Svc.Objects.LocalPlayer;
+                    if (local is not null)
+                    {
+                        ImGui.SameLine();
+                        if (ImGui.Button("Use current##gen_autologin_use_cur"))
+                        {
+                            cfg.AutoLoginCharacterName = local.Name.TextValue;
+                            cfg.AutoLoginWorldName = local.HomeWorld.ValueNullable?.Name.ExtractText() ?? string.Empty;
+                            cfg.Save();
+                        }
+                    }
+                });
         }
 
         SettingsRow.Draw("Auto-resume after disconnect",
