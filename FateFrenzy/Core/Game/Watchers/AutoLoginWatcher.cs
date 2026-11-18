@@ -1,5 +1,6 @@
 using Dalamud.Plugin.Services;
 using ECommons;
+using ECommons.Automation.UIInput;
 using ECommons.DalamudServices;
 using ECommons.ExcelServices;
 using ECommons.UIHelpers.AddonMasterImplementations;
@@ -8,11 +9,11 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 namespace FateFrenzy.Core.Game.Watchers;
 
 // Handles automatic login on game launch and automatic relogin after a disconnect.
-// Both features are disabled by default and operate strictly on the Title Screen / Lobby
-// when Svc.ClientState.IsLoggedIn is false.
+// Modeled after Lifestream's TaskChangeCharacter flow for TitleMenu, TitleDCWorldMap,
+// _CharaSelectListMenu, and _CharaSelectWorldServer.
 internal sealed unsafe class AutoLoginWatcher : IDisposable
 {
-    private const long ActionCooldownMs = 1500;
+    private const long ActionCooldownMs = 1200;
 
     private long nextActionTick = 0;
     private long nextWorldSwitchTick = 0;
@@ -61,6 +62,7 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
         if (wasLoggedIn)
         {
             wasLoggedIn = false;
+            dcSelectedThisAttempt = false;
             if (cfg.WasRunningBeforeDisconnect || Plugin.Instance.Controller.SessionSnapshot is not null)
                 pendingReloginFromDisconnect = true;
         }
@@ -98,7 +100,8 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
     {
         if (string.IsNullOrEmpty(text)) return false;
         return text.Contains("queue", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("fila", StringComparison.OrdinalIgnoreCase);
+            || text.Contains("fila", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("players remaining", StringComparison.OrdinalIgnoreCase);
     }
 
     private (string name, string world) ResolveTargetCharacter(Configuration cfg)
@@ -113,7 +116,7 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
     {
         try
         {
-            // 1. Dismiss disconnect error popups (Dialogue / SelectOk)
+            // 1. Dismiss disconnect error popups (Dialogue / SelectOk), ignoring queue popups
             if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("Dialogue", out var dlg) && GenericHelpers.IsAddonReady(dlg))
             {
                 Svc.Log.Info("[FateFrenzy] AutoLogin: dismissing Dialogue error popup.");
@@ -134,34 +137,40 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
                 return;
             }
 
-            // Wait quietly if lobby connection is currently in progress
+            // Wait quietly while lobby connection is in progress
             if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("TitleConnect", out _))
                 return;
 
             var (targetName, targetWorld) = ResolveTargetCharacter(cfg);
+            int targetDcId = 0;
+            string targetDcName = string.Empty;
+            if (!string.IsNullOrEmpty(targetWorld) && ExcelWorldHelper.TryGet(targetWorld, out var wInfo))
+            {
+                targetDcId = (int)wInfo.DataCenter.RowId;
+                targetDcName = wInfo.DataCenter.ValueNullable?.Name.ToString() ?? targetDcId.ToString();
+            }
 
             // 2. Data Center selection screen (TitleDCWorldMap)
             if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("TitleDCWorldMap", out var dcAddon) && GenericHelpers.IsAddonReady(dcAddon))
             {
-                if (!string.IsNullOrEmpty(targetWorld) && ExcelWorldHelper.TryGet(targetWorld, out var wInfo) && wInfo.DataCenter.RowId > 0)
+                if (targetDcId > 0)
                 {
-                    var dcId = (int)wInfo.DataCenter.RowId;
-                    var dcName = wInfo.DataCenter.ValueNullable?.Name.ToString() ?? dcId.ToString();
-                    Svc.Log.Info($"[FateFrenzy] AutoLogin: selecting Data Center {dcName} (id={dcId}) for world {targetWorld}.");
-                    new AddonMaster.TitleDCWorldMap(dcAddon).Select(dcId);
+                    Svc.Log.Info($"[FateFrenzy] AutoLogin: selecting Data Center {targetDcName} (id={targetDcId}) for world {targetWorld}.");
+                    var dcMaster = new AddonMaster.TitleDCWorldMap(dcAddon);
+                    dcMaster.Select(targetDcId);
                     dcSelectedThisAttempt = true;
                     nextActionTick = now + 2000;
                 }
                 return;
             }
 
-            // 3. Title Screen: select Data Center first if world is configured, then click Start
+            // 3. Title Screen (_TitleMenu): open Data Center menu if needed, otherwise click Start
             if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("_TitleMenu", out var titleAddon))
             {
                 var title = new AddonMaster._TitleMenu(titleAddon);
                 if (title.IsReady)
                 {
-                    if (!dcSelectedThisAttempt && !string.IsNullOrEmpty(targetWorld) && ExcelWorldHelper.TryGet(targetWorld, out var wInfo) && wInfo.DataCenter.RowId > 0)
+                    if (!dcSelectedThisAttempt && targetDcId > 0)
                     {
                         Svc.Log.Info($"[FateFrenzy] AutoLogin: opening Data Center menu for world {targetWorld}.");
                         title.DataCenter();
@@ -186,26 +195,7 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
                 return;
             }
 
-            // 5. World Selection popup (_CharaSelectWorldServer)
-            if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("_CharaSelectWorldServer", out var worldAddon) && GenericHelpers.IsAddonReady(worldAddon))
-            {
-                if (!string.IsNullOrEmpty(targetWorld))
-                {
-                    var worldMenu = new AddonMaster._CharaSelectWorldServer(worldAddon);
-                    var match = worldMenu.Worlds.FirstOrDefault(w => w.Name.Equals(targetWorld, StringComparison.OrdinalIgnoreCase));
-                    if (match is not null)
-                    {
-                        Svc.Log.Info($"[FateFrenzy] AutoLogin: selecting world {match.Name}.");
-                        match.Select();
-                        nextActionTick = now + 2000;
-                        return;
-                    }
-                    Svc.Log.Warning($"[FateFrenzy] AutoLogin: configured world '{targetWorld}' not found in world list.");
-                }
-                return;
-            }
-
-            // 5. Character Select List: select and log in
+            // 5. Character Select List (_CharaSelectListMenu) + World List (_CharaSelectWorldServer)
             if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("_CharaSelectListMenu", out var charaAddon) && GenericHelpers.IsAddonReady(charaAddon))
             {
                 var menu = new AddonMaster._CharaSelectListMenu(charaAddon);
@@ -214,32 +204,53 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
                 var chars = menu.Characters;
                 var target = FindCharacter(chars, targetName, targetWorld);
 
-                if (target is null)
+                if (target is not null)
                 {
-                    // If character not on currently displayed world and user specified a world, switch worlds
-                    if (!string.IsNullOrEmpty(targetWorld) && now >= nextWorldSwitchTick)
+                    if (target.CanLoginNormally)
                     {
-                        Svc.Log.Info($"[FateFrenzy] AutoLogin: '{targetName}' not on current world list; opening World selection for {targetWorld}.");
-                        menu.World();
-                        nextWorldSwitchTick = now + 4000;
-                        nextActionTick = now + 1500;
+                        Svc.Log.Info($"[FateFrenzy] AutoLogin: logging in as {target.Name}@{ExcelWorldHelper.GetName(target.HomeWorld)}.");
+                        target.Login();
+                        nextActionTick = now + 2000;
                     }
                     return;
                 }
 
-                if (!target.IsSelected)
+                // Target character is not in the currently displayed world's character list.
+                // Check the _CharaSelectWorldServer sidebar (which is always open on Character Select).
+                if (!string.IsNullOrEmpty(targetWorld) &&
+                    GenericHelpers.TryGetAddonByName<AtkUnitBase>("_CharaSelectWorldServer", out var worldAddon) &&
+                    GenericHelpers.IsAddonReady(worldAddon))
                 {
-                    Svc.Log.Info($"[FateFrenzy] AutoLogin: selecting character {target.Name} ({ExcelWorldHelper.GetName(target.HomeWorld)}).");
-                    target.Select();
-                    nextActionTick = now + 1000;
-                    return;
-                }
+                    var worldMenu = new AddonMaster._CharaSelectWorldServer(worldAddon);
+                    if (worldMenu.Worlds.Length == 0) return;
 
-                if (target.CanLoginNormally)
-                {
-                    Svc.Log.Info($"[FateFrenzy] AutoLogin: logging in as {target.Name}.");
-                    target.Login();
-                    nextActionTick = now + 2000;
+                    var worldMatch = worldMenu.Worlds.FirstOrDefault(w => w.Name.Equals(targetWorld, StringComparison.OrdinalIgnoreCase));
+                    if (worldMatch is not null)
+                    {
+                        if (now >= nextWorldSwitchTick)
+                        {
+                            Svc.Log.Info($"[FateFrenzy] AutoLogin: switching world sidebar to {worldMatch.Name}.");
+                            worldMatch.Select();
+                            nextWorldSwitchTick = now + 2000;
+                            nextActionTick = now + 1500;
+                        }
+                        return;
+                    }
+
+                    // Target world is NOT in this Data Center! Return to Title Screen to pick the right DC.
+                    if (targetDcId > 0 &&
+                        GenericHelpers.TryGetAddonByName<AtkUnitBase>("_CharaSelectReturn", out var retAddon) &&
+                        GenericHelpers.IsAddonReady(retAddon))
+                    {
+                        Svc.Log.Info($"[FateFrenzy] AutoLogin: world '{targetWorld}' is not on this Data Center; returning to Title Screen to switch DC.");
+                        dcSelectedThisAttempt = false;
+                        var retBtn = retAddon->GetComponentButtonById(4);
+                        if (retBtn != null && retBtn->IsEnabled)
+                        {
+                            retBtn->ClickAddonButton(retAddon);
+                        }
+                        nextActionTick = now + 2500;
+                    }
                 }
             }
         }
@@ -273,12 +284,10 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
             return null;
         }
 
-        // If no character name specified, fall back to first character on the current world
         if (!string.IsNullOrEmpty(targetWorld))
         {
-            var firstOnWorld = chars.FirstOrDefault(c =>
+            return chars.FirstOrDefault(c =>
                 ExcelWorldHelper.GetName(c.HomeWorld).Equals(targetWorld, StringComparison.OrdinalIgnoreCase));
-            return firstOnWorld;
         }
 
         return chars[0];
