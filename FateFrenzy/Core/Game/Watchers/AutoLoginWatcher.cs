@@ -153,13 +153,27 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
             // 2. Data Center selection screen (TitleDCWorldMap)
             if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("TitleDCWorldMap", out var dcAddon) && GenericHelpers.IsAddonReady(dcAddon))
             {
-                if (targetDcId > 0)
+                if (!dcSelectedThisAttempt && targetDcId > 0)
                 {
                     Svc.Log.Info($"[FateFrenzy] AutoLogin: selecting Data Center {targetDcName} (id={targetDcId}) for world {targetWorld}.");
                     var dcMaster = new AddonMaster.TitleDCWorldMap(dcAddon);
-                    dcMaster.Select(targetDcId);
-                    dcSelectedThisAttempt = true;
-                    nextActionTick = now + 2000;
+                    if (dcMaster.Select(targetDcId))
+                    {
+                        dcSelectedThisAttempt = true;
+                        nextActionTick = now + 500;
+                    }
+                    else
+                    {
+                        Svc.Log.Warning($"[FateFrenzy] AutoLogin: TitleDCWorldMap.Select({targetDcId}) returned false.");
+                        nextActionTick = now + ActionCooldownMs;
+                    }
+                }
+                else if (dcSelectedThisAttempt)
+                {
+                    // Close TitleDCWorldMap after selection just like Lifestream's SelectServiceAccount
+                    Svc.Log.Debug("[FateFrenzy] AutoLogin: closing TitleDCWorldMap after DC selection.");
+                    dcAddon->Close(true);
+                    nextActionTick = now + 1500;
                 }
                 return;
             }
@@ -172,10 +186,10 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
                 {
                     if (!dcSelectedThisAttempt && targetDcId > 0)
                     {
-                        Svc.Log.Info($"[FateFrenzy] AutoLogin: opening Data Center menu for world {targetWorld}.");
+                        Svc.Log.Info($"[FateFrenzy] AutoLogin: opening Data Center menu for world {targetWorld} (DC={targetDcName}).");
                         title.DataCenter();
-                        dcSelectedThisAttempt = true;
-                        nextActionTick = now + 1500;
+                        // Note: do NOT set dcSelectedThisAttempt = true here; wait until TitleDCWorldMap actually opens and selects!
+                        nextActionTick = now + 1200;
                         return;
                     }
 
