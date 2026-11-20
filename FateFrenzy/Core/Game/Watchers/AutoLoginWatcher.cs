@@ -170,8 +170,9 @@ internal sealed unsafe class AutoLoginWatcher : IDisposable
             string targetDcName = string.Empty;
             if (!string.IsNullOrEmpty(targetWorld) && ExcelWorldHelper.TryGet(targetWorld, out var wInfo))
             {
-                targetDcId = (int)wInfo.DataCenter.RowId;
-                targetDcName = wInfo.DataCenter.ValueNullable?.Name.ToString() ?? targetDcId.ToString();
+                targetDcId = (int)wInfo.Unknown0;
+                if (targetDcId == 0) targetDcId = (int)wInfo.DataCenter.RowId;
+                targetDcName = Svc.Data.GetExcelSheet<WorldDCGroupType>()?.GetRowOrDefault((uint)targetDcId)?.Name.ToString() ?? targetDcId.ToString();
             }
 
             // Initialize step based on whatever screen is currently visible
