@@ -371,11 +371,12 @@ public sealed class AutoVoucherHandoff(string partnerName) : AutoCommon
         var agentModule = UIModule.Instance()->GetAgentModule();
         if (agentModule == null) return nint.Zero;
 
-        var tradeAgent = agentModule->GetAgentByInternalId((AgentId)36);
+        var tradeAgent = agentModule->GetAgentByInternalId(AgentId.Trade);
         if (tradeAgent == null)
-            tradeAgent = agentModule->GetAgentByInternalId(AgentId.Trade);
+            tradeAgent = agentModule->GetAgentByInternalId((AgentId)36);
 
-        return (nint)tradeAgent;
+        // Dropbox Memory.SafeOfferItemTrade passes AgentTrade + 40 (the OfferItemTrade interface offset)
+        return tradeAgent != null ? (nint)tradeAgent + 40 : nint.Zero;
     }
 
     private static unsafe bool TrySubmitInputNumeric(int quantity)
@@ -397,13 +398,6 @@ public sealed class AutoVoucherHandoff(string partnerName) : AutoCommon
             return false;
         }
 
-        var tradeAgent = GetTradeAgent();
-        if (tradeAgent == nint.Zero)
-        {
-            Svc.Log.Error("[FateFrenzy] Could not obtain trade agent pointer.");
-            return false;
-        }
-
         var slots = FindVoucherSlots(voucherId);
         if (slots.Count == 0)
         {
@@ -420,7 +414,12 @@ public sealed class AutoVoucherHandoff(string partnerName) : AutoCommon
 
             var offerQty = Math.Min(slotInfo.Quantity, remainingToOffer);
             Diag($"Offering {offerQty}x vouchers from bag {slotInfo.Bag} slot {slotInfo.Slot} into trade.");
-            offerItemTrade(tradeAgent, slotInfo.Slot, slotInfo.Bag);
+            await Svc.Framework.RunOnTick(() =>
+            {
+                var tradeAgent = GetTradeAgent();
+                if (tradeAgent != nint.Zero)
+                    offerItemTrade(tradeAgent, slotInfo.Slot, slotInfo.Bag);
+            });
             await DelayMs(300);
 
             // If the item stack in this slot is > 1, FFXIV opens the InputNumeric addon
@@ -430,7 +429,9 @@ public sealed class AutoVoucherHandoff(string partnerName) : AutoCommon
                 var submitted = false;
                 while (Environment.TickCount64 < numericDeadline && !CancelToken.IsCancellationRequested)
                 {
-                    if (TrySubmitInputNumeric(offerQty))
+                    var ok = false;
+                    await Svc.Framework.RunOnTick(() => ok = TrySubmitInputNumeric(offerQty));
+                    if (ok)
                     {
                         Diag($"InputNumeric open: submitted quantity {offerQty} via Callback.");
                         submitted = true;
@@ -458,6 +459,11 @@ public sealed class AutoVoucherHandoff(string partnerName) : AutoCommon
     {
         if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("Trade", out var addon) && GenericHelpers.IsAddonReady(addon))
         {
+            if (addon->UldManager.NodeListCount > 3 && addon->UldManager.NodeList[3] != null)
+            {
+                var tradeBtn = (AtkComponentButton*)addon->UldManager.NodeList[3]->GetComponent();
+                if (tradeBtn != null && !tradeBtn->IsEnabled) return;
+            }
             Callback.Fire(addon, true, 0);
         }
     }

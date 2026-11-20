@@ -12,6 +12,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace FateFrenzy.Core.Tasks;
@@ -25,6 +26,32 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
     private const int InteractWaitMs = 15_000;
     private const int AddonWaitMs = 12_000;
     private const int ActionDelayMs = 600;
+
+    // Matches AutoRetainer's RetainerItemCommand signature:
+    // (AgentRetainer + 40, slot, InventoryType, 0, command=5 for HaveRetainerSellItem)
+    [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
+    private delegate void RetainerItemCommandDelegate(nint agentRetainerCommandModule, uint slot, InventoryType inventoryType, uint a4, long command);
+    private static RetainerItemCommandDelegate? retainerItemCommand;
+    private static bool retainerSigScanned;
+
+    private static void EnsureRetainerSigScan()
+    {
+        if (retainerSigScanned) return;
+        retainerSigScanned = true;
+        try
+        {
+            var addr = Svc.SigScanner.ScanText("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 30 48 8B 5C 24 ?? 41 8B F0");
+            if (addr != nint.Zero)
+            {
+                retainerItemCommand = Marshal.GetDelegateForFunctionPointer<RetainerItemCommandDelegate>(addr);
+                Svc.Log.Info("[FateFrenzy] RetainerItemCommand function scanned successfully.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Svc.Log.Warning(ex, "[FateFrenzy] Could not scan RetainerItemCommand signature.");
+        }
+    }
 
     protected override async Task Execute()
     {
@@ -369,9 +396,32 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
             return;
         }
 
-        var invAddonId = GetOpenInventoryAddonId();
-        Diag($"Found Whistle in bag {slotInfo.Value.bag} slot {slotInfo.Value.slot}. Triggering inventory context menu (addonId={invAddonId})...");
-        TryOpenInventorySlotContextMenu(slotInfo.Value.bag, slotInfo.Value.slot, invAddonId);
+        EnsureRetainerSigScan();
+        var triggeredDirect = false;
+        if (retainerItemCommand != null)
+        {
+            await Svc.Framework.RunOnTick(() =>
+            {
+                unsafe
+                {
+                    var agent = AgentModule.Instance()->GetAgentByInternalId(AgentId.Retainer);
+                    if (agent != null && agent->IsAgentActive())
+                    {
+                        var cmdModule = (nint)agent + 40;
+                        Diag($"Calling AutoRetainer-style RetainerItemCommand (slot={slotInfo.Value.slot}, bag={slotInfo.Value.bag}, cmd=5 HaveRetainerSellItem)...");
+                        retainerItemCommand(cmdModule, (uint)slotInfo.Value.slot, slotInfo.Value.bag, 0, 5);
+                        triggeredDirect = true;
+                    }
+                }
+            });
+        }
+
+        if (!triggeredDirect)
+        {
+            var invAddonId = GetOpenInventoryAddonId();
+            Diag($"Fallback: Found Whistle in bag {slotInfo.Value.bag} slot {slotInfo.Value.slot}. Triggering inventory context menu (addonId={invAddonId})...");
+            await Svc.Framework.RunOnTick(() => TryOpenInventorySlotContextMenu(slotInfo.Value.bag, slotInfo.Value.slot, invAddonId));
+        }
 
         // Wait for either ContextMenu or RetainerSell addon
         var waitDialogDeadline = Environment.TickCount64 + 8000;
@@ -385,7 +435,9 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
             if (IsContextMenuOpen())
             {
                 Diag("ContextMenu detected; selecting sell entry...");
-                if (TrySelectSellFromContextMenu())
+                var selected = false;
+                await Svc.Framework.RunOnTick(() => selected = TrySelectSellFromContextMenu());
+                if (selected)
                 {
                     await DelayMs(600);
                 }
@@ -398,9 +450,9 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
         if (IsRetainerSellOpen())
         {
             Diag($"Setting asking price to {price:N0} gil...");
-            TrySetRetainerSellPrice(price);
+            await Svc.Framework.RunOnTick(() => TrySetRetainerSellPrice(price));
             await DelayMs(ActionDelayMs);
-            ConfirmRetainerSell();
+            await Svc.Framework.RunOnTick(() => ConfirmRetainerSell());
             await DelayMs(ActionDelayMs * 2);
         }
         else

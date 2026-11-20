@@ -1,9 +1,11 @@
 using clib.TaskSystem;
 using Dalamud.Game.ClientState.Conditions;
 using ECommons;
+using ECommons.Automation;
 using ECommons.DalamudServices;
 using ECommons.UIHelpers.AddonMasterImplementations;
 using FateFrenzy.Core.Game.Ops;
+using FateFrenzy.Core.Ipc;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
@@ -70,10 +72,11 @@ public sealed class AutoMountExchange : AutoCommon
             ErrorIf(!reached, $"Could not reach Mor Dhona (still in {Svc.ClientState.TerritoryType}); aborting mount exchange.");
         }
 
-        // 2. Resolve Edelina location
+        // 2. Resolve Edelina location (snap fallback to walkable floor via navmesh)
         var npc = RepairOps.FindNearestObjectByBaseId(EdelinaEnpcBaseId)
                ?? Svc.Objects.FirstOrDefault(o => o.Name.ToString().Equals("Edelina", StringComparison.OrdinalIgnoreCase));
-        var targetPos = npc?.Position ?? EdelinaFallbackWorldPos;
+        var rawPos = npc?.Position ?? EdelinaFallbackWorldPos;
+        var targetPos = NavmeshIPC.Instance.NearestPointReachable(rawPos, 15f, 15f) ?? rawPos;
 
         // 3. Walk on FOOT (GroundMove only, never fly into sky) to Edelina
         await RunWithStatusPinned("Walking to Edelina", async () =>
@@ -86,53 +89,68 @@ public sealed class AutoMountExchange : AutoCommon
             await RunCancellable(move, MoveWatchdogMs, "mount-walk");
         });
 
-        // 4. Find and interact with Edelina
+        // 4. Find Edelina now that we're in render range and approach closer if needed
         npc ??= RepairOps.FindNearestObjectByBaseId(EdelinaEnpcBaseId)
              ?? Svc.Objects.FirstOrDefault(o => o.Name.ToString().Equals("Edelina", StringComparison.OrdinalIgnoreCase));
         ErrorIf(npc is null, "Could not find Edelina in Revenant's Toll.");
 
+        if (Vector3.Distance(Svc.Objects.LocalPlayer?.Position ?? Vector3.Zero, npc!.Position) > 3.0f)
+        {
+            var step = new MoveOp(o => o.Move(MorDhonaTerritoryId, npc.Position,
+                MovementConfig.GroundMove.WithTolerance(2.0f),
+                allowTeleportIfFaster: false,
+                stopCondition: null,
+                allowAethernetWithinTerritory: false));
+            await RunCancellable(step, 15_000, "mount-approach");
+        }
+
         Status = "Interacting with Edelina";
         var interact = new MoveOp(o => o.Interact(npc!,
-            waitUntil: () => ShopInteraction.ShopExchangeCurrencyOpen() || ShopInteraction.SelectIconStringOpen(),
+            waitUntil: () => AnyEdelinaShopOpen() || ShopInteraction.SelectIconStringOpen(),
             skip: UiSkipOptions.YesNo));
         await RunCancellable(interact, InteractWaitMs, "mount-interact");
 
         ErrorIf(!await WaitUntilTimed(
-                () => ShopInteraction.ShopExchangeCurrencyOpen() || ShopInteraction.SelectIconStringOpen(),
+                () => AnyEdelinaShopOpen() || ShopInteraction.SelectIconStringOpen(),
                 ShopOpenWaitMs, "wait-edelina-menu"),
             "Edelina did not open a menu within timeout; aborting.");
 
-        // 5. If submenu open, pick "Bicolor Gemstone Vouchers"
+        // 5. If submenu open, pick "Turali Bicolor Gemstone" / "Bicolor" / "Voucher"
         if (ShopInteraction.SelectIconStringOpen())
         {
             await NavigateEdelinaMenu();
         }
 
-        ErrorIf(!ShopInteraction.ShopExchangeCurrencyOpen(),
+        ErrorIf(!AnyEdelinaShopOpen(),
             "Could not open Edelina's voucher exchange shop.");
 
-        // 6. Buy Whistle
+        // 6. Buy Whistle (supports both ShopExchangeItem and ShopExchangeCurrency)
         var vouchersBefore = CurrentVoucherCount(targetVoucherId);
         var whistleBefore = CurrentWhistleCount(targetItemId);
 
         Status = "Purchasing Mount Whistle";
-        ErrorIf(!ShopInteraction.BuyFromCurrencyShop(targetItemId, 1),
-            $"Mount Whistle (ID {targetItemId}) not visible in Edelina's shop.");
+        bool bought = false;
+        if (ShopInteraction.ShopExchangeCurrencyOpen())
+            bought = ShopInteraction.BuyFromCurrencyShop(targetItemId, 1);
+        else if (IsShopExchangeItemOpen())
+            bought = BuyFromExchangeItemShop(targetItemId);
+
+        ErrorIf(!bought,
+            $"Mount Whistle (ID {targetItemId}) not found in Edelina's shop.");
 
         if (!await WaitUntilTimed(
-                () => ShopInteraction.SelectYesnoOpen() || CurrentVoucherCount(targetVoucherId) < vouchersBefore,
+                () => AnyConfirmDialogOpen() || CurrentVoucherCount(targetVoucherId) < vouchersBefore,
                 ConfirmWaitMs, "wait-confirm-whistle"))
             Diag("No confirm dialog detected; continuing.");
 
-        if (ShopInteraction.SelectYesnoOpen())
-            ShopInteraction.ClickSelectYesno();
+        ConfirmPurchaseDialog();
 
         await WaitUntilTimed(
             () => CurrentWhistleCount(targetItemId) > whistleBefore,
             ExchangeWaitMs, "wait-whistle-received");
 
         Status = "Closing shop";
-        ShopInteraction.CloseShop();
+        CloseAllEdelinaMenus();
         await DelayMs(SettleDelayMs);
 
         var whistleAfter = CurrentWhistleCount(targetItemId);
@@ -145,6 +163,83 @@ public sealed class AutoMountExchange : AutoCommon
         {
             Diag("Mount Whistle not detected in inventory after exchange attempt.");
         }
+    }
+
+    private static bool AnyEdelinaShopOpen()
+        => ShopInteraction.ShopExchangeCurrencyOpen() || IsShopExchangeItemOpen();
+
+    private static unsafe bool IsShopExchangeItemOpen()
+        => GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeItem", out var addon) && GenericHelpers.IsAddonReady(addon);
+
+    private static unsafe bool AnyConfirmDialogOpen()
+        => ShopInteraction.SelectYesnoOpen()
+        || (GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeItemDialog", out var d1) && GenericHelpers.IsAddonReady(d1))
+        || (GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeCurrencyDialog", out var d2) && GenericHelpers.IsAddonReady(d2));
+
+    private static unsafe void ConfirmPurchaseDialog()
+    {
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeItemDialog", out var itemDlg) && GenericHelpers.IsAddonReady(itemDlg))
+        {
+            new AddonMaster.ShopExchangeItemDialog(itemDlg).Exchange();
+            return;
+        }
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeCurrencyDialog", out var curDlg) && GenericHelpers.IsAddonReady(curDlg))
+        {
+            new AddonMaster.ShopExchangeCurrencyDialog(curDlg).Exchange();
+            return;
+        }
+        if (ShopInteraction.SelectYesnoOpen())
+        {
+            ShopInteraction.ClickSelectYesno();
+        }
+    }
+
+    private static unsafe bool BuyFromExchangeItemShop(uint targetItemId)
+    {
+        if (!GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeItem", out var addon) || !GenericHelpers.IsAddonReady(addon))
+            return false;
+
+        var targetItemName = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>()?.GetRowOrDefault(targetItemId)?.Name.ExtractText() ?? "Ty'aitya Whistle";
+
+        // Scan AtkComponentList in ShopExchangeItem for matching item name
+        for (var n = 0; n < addon->UldManager.NodeListCount; n++)
+        {
+            var node = addon->UldManager.NodeList[n];
+            if (node == null || node->Type != NodeType.Component) continue;
+            var compNode = (AtkComponentNode*)node;
+            if (compNode->Component == null || compNode->Component->GetComponentType() != ComponentType.List) continue;
+
+            var list = (AtkComponentList*)compNode->Component;
+            for (var row = 0; row < list->ListLength; row++)
+            {
+                var renderer = list->ItemRendererList[row].AtkComponentListItemRenderer;
+                if (renderer == null) continue;
+                var uld = &renderer->AtkComponentButton.AtkComponentBase.UldManager;
+                for (var j = 0; j < uld->NodeListCount; j++)
+                {
+                    var child = uld->NodeList[j];
+                    if (child == null || child->Type != NodeType.Text) continue;
+                    var text = ((AtkTextNode*)child)->NodeText.ToString();
+                    if (!string.IsNullOrEmpty(text) && text.Contains(targetItemName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Svc.Log.Info($"[FateFrenzy] ShopExchangeItem: found '{text}' at row {row}, firing Callback(0, {row}).");
+                        Callback.Fire(addon, true, 0, row);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static unsafe void CloseAllEdelinaMenus()
+    {
+        ShopInteraction.CloseShop();
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeItem", out var itemShop) && GenericHelpers.IsAddonReady(itemShop))
+            Callback.Fire(itemShop, true, -1);
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectIconString, out var iconStr) && GenericHelpers.IsAddonReady(iconStr))
+            Callback.Fire(iconStr, true, -1);
     }
 
     private unsafe Task NavigateEdelinaMenu()
@@ -161,11 +256,14 @@ public sealed class AutoMountExchange : AutoCommon
             {
                 var master = new AddonMaster.SelectIconString(addon);
                 var text = master.Entries[i].Text;
-                if (!string.IsNullOrEmpty(text) && text.Contains("Bicolor", StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrEmpty(text) &&
+                    (text.Contains("Turali", StringComparison.OrdinalIgnoreCase)
+                     || text.Contains("Bicolor", StringComparison.OrdinalIgnoreCase)
+                     || text.Contains("Voucher", StringComparison.OrdinalIgnoreCase)))
                 {
                     Diag($"Found Bicolor menu entry at index {i}: '{text}'");
                     master.Entries[i].Select();
-                    return WaitUntilTimed(ShopInteraction.ShopExchangeCurrencyOpen, SubmenuWaitMs, "wait-bicolor-shop");
+                    return WaitUntilTimed(AnyEdelinaShopOpen, SubmenuWaitMs, "wait-bicolor-shop");
                 }
             }
         }
@@ -173,7 +271,7 @@ public sealed class AutoMountExchange : AutoCommon
         if (ShopInteraction.SelectIconStringOpen())
         {
             ShopInteraction.ClickSelectIconString(0);
-            return WaitUntilTimed(ShopInteraction.ShopExchangeCurrencyOpen, SubmenuWaitMs, "wait-bicolor-shop-default");
+            return WaitUntilTimed(AnyEdelinaShopOpen, SubmenuWaitMs, "wait-bicolor-shop-default");
         }
 
         return Task.CompletedTask;
