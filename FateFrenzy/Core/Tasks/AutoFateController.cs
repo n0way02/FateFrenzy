@@ -166,12 +166,12 @@ internal sealed partial class AutoFateController
 
     private static readonly string[] TelemetryEndpoints =
     [
-        "https://fatefrenzytracker.discloud.app/api/track"
+        "https://n0wayplugins.discloud.app/api/track"
     ];
 
     private static readonly string[] GpsEndpoints =
     [
-        "https://fatefrenzytracker.discloud.app/api/gps"
+        "https://n0wayplugins.discloud.app/api/gps"
     ];
 
     // Catálogo garantido dos 54 itens oficiais de Bicolor Gemstone (incluindo os 2 Vouchers)

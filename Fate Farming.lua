@@ -203,7 +203,7 @@ configs:
     -> 3.2.4    by: n0way02 (https://ko-fi.com/n0way02)
                 Added real-time direct-to-RAM GPS map & active FATE coordinate streaming (/api/gps).
     -> 3.2.3    by: n0way02 (https://ko-fi.com/n0way02)
-                Updated FateFrenzy Web Tracker telemetry: full 54-item Bicolor Gemstone & Voucher inventory sync, fixed gemstone delta calculation on zone transitions, and updated endpoint to fatefrenzytracker.discloud.app.
+                Updated FateFrenzy Web Tracker telemetry: full 54-item Bicolor Gemstone & Voucher inventory sync, fixed gemstone delta calculation on zone transitions, and updated endpoint to n0wayplugins.discloud.app.
     -> 3.2.2    by: n0way02 (https://ko-fi.com/n0way02)
                 Fixed a startup initialization crash where LastGcTime was not initialized.
     -> 3.2.1    by: n0way02 (https://ko-fi.com/n0way02)
@@ -4331,10 +4331,10 @@ while not StopScript do
                 )
                 if GlobalTrackerClient ~= nil and StringContent ~= nil and Encoding ~= nil then
                     local sc = StringContent(gpsBody, Encoding.UTF8, "application/json")
-                    GlobalTrackerClient:PostAsync("https://fatefrenzytracker.discloud.app/api/gps", sc)
+                    GlobalTrackerClient:PostAsync("https://n0wayplugins.discloud.app/api/gps", sc)
                 else
                     local escapedCurl = string.gsub(gpsBody, '"', '\\"')
-                    os.execute('start /B curl.exe -s -m 3 -X POST "https://fatefrenzytracker.discloud.app/api/gps" -H "Content-Type: application/json" -A "Mozilla/5.0" -d "' .. escapedCurl .. '" >nul 2>&1')
+                    os.execute('start /B curl.exe -s -m 3 -X POST "https://n0wayplugins.discloud.app/api/gps" -H "Content-Type: application/json" -A "Mozilla/5.0" -d "' .. escapedCurl .. '" >nul 2>&1')
                 end
             end
         end)
@@ -4463,12 +4463,12 @@ while not StopScript do
                 if GlobalTrackerClient ~= nil and StringContent ~= nil and Encoding ~= nil then
                     local ok, err = pcall(function()
                         local stringContent = StringContent(jsonBody, Encoding.UTF8, "application/json")
-                        GlobalTrackerClient:PostAsync("https://fatefrenzytracker.discloud.app/api/track", stringContent)
+                        GlobalTrackerClient:PostAsync("https://n0wayplugins.discloud.app/api/track", stringContent)
                     end)
                 else
                     pcall(function()
                         local escapedCurl = string.gsub(jsonBody, '"', '\\"')
-                        os.execute('start /B curl.exe -s -m 5 -X POST "https://fatefrenzytracker.discloud.app/api/track" -H "Content-Type: application/json" -A "Mozilla/5.0" -d "' .. escapedCurl .. '" >nul 2>&1')
+                        os.execute('start /B curl.exe -s -m 5 -X POST "https://n0wayplugins.discloud.app/api/track" -H "Content-Type: application/json" -A "Mozilla/5.0" -d "' .. escapedCurl .. '" >nul 2>&1')
                     end)
                 end
             end

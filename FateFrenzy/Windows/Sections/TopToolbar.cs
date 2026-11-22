@@ -36,7 +36,7 @@ internal static class TopToolbar
         using (ImRaii.PushFont(UiBuilder.IconFont))
         using (ImRaii.PushColor(ImGuiCol.Text, Styling.AccentBlue))
             webClicked = ImGui.Button(webLabel + "##webtracker");
-        HoverTip("Web Tracker (Monitor FATEs online)\nhttps://fatefrenzytracker.discloud.app/");
+        HoverTip("Web Tracker (Monitor FATEs online)\nhttps://n0wayplugins.discloud.app/tracker");
 
         ImGui.SameLine();
         bool statsClicked;
@@ -64,7 +64,7 @@ internal static class TopToolbar
         HoverTip("Settings");
 
         if (supportClicked) UrlActions.OpenInBrowser("https://ko-fi.com/n0way02");
-        if (webClicked) UrlActions.OpenInBrowser("https://fatefrenzytracker.discloud.app/");
+        if (webClicked) UrlActions.OpenInBrowser("https://n0wayplugins.discloud.app/tracker");
         if (statsClicked) plugin.ToggleHistoryUi();
         if (plugClicked) plugin.ToggleDependenciesUi();
         if (infoClicked) plugin.ToggleAboutUi();

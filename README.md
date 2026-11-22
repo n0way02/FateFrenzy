@@ -2,7 +2,7 @@
 
 [![License: AGPL 3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![Dalamud: API 15](https://img.shields.io/badge/Dalamud-API%2015-blue.svg)](https://dalamud.dev/)
-[![Web Tracker](https://img.shields.io/badge/Web%20Tracker-Online-green.svg)](https://fatefrenzytracker.discloud.app/)
+[![Web Tracker](https://img.shields.io/badge/Web%20Tracker-Online-green.svg)](https://n0wayplugins.discloud.app/tracker)
 [![Ko-fi Support](https://img.shields.io/badge/Support%20me-Ko--fi-ff5e5b.svg)](https://ko-fi.com/n0way02)
 
 **FateFrenzy** is the most advanced, fully automated, and feature-rich FATE farming plugin for Final Fantasy XIV (Dalamud). Designed with a sleek Cyberpunk / Holographic Neon interface, it coordinates pathfinding, combat rotations, cross-instance hops, data-center world travel, multi-account voucher exchanges, Retainer market listing, and live web/Discord telemetry in a unified, 100% hands-off loop.
@@ -13,7 +13,7 @@
 
 FateFrenzy features an official companion web platform where you can track all your farming characters from anywhere (PC, tablet, or phone):
 
-👉 **[https://fatefrenzytracker.discloud.app/](https://fatefrenzytracker.discloud.app/)**
+👉 **[https://n0wayplugins.discloud.app/tracker](https://n0wayplugins.discloud.app/tracker)**
 
 * **Live Telemetry & GPS:** Real-time character coordinates, active zone, current instance, and target FATE progress.
 * **Wallet & Stock Monitor:** Live count of Bicolor Gemstones, Bicolor Gemstone Vouchers, and special inventory items.
