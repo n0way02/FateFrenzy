@@ -88,9 +88,9 @@ Install these plugins via Dalamud to enable full functionality:
 
 1. Open Dalamud Settings in-game by typing `/xlsettings` in chat.
 2. Go to the **Experimental** tab.
-3. Under **Custom Plugin Repositories**, add this URL:
+3. Under **Custom Plugin Repositories**, add this URL (unified repository for all my Dalamud plugins):
    ```
-   https://raw.githubusercontent.com/n0way02/FateFrenzy/main/repo/pluginmaster.json
+   https://raw.githubusercontent.com/n0way02/DalamudPlugins/main/pluginmaster.json
    ```
 4. Click **+** (Add), then click **Save and Close**.
 5. Open the Plugin Installer with `/xlplugins`.
