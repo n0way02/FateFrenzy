@@ -15,6 +15,8 @@ public sealed class SharedAccountState
     public string CharacterName { get; set; } = string.Empty;
     public uint WorldId { get; set; }
     public string WorldName { get; set; } = string.Empty;
+    public uint CurrentWorldId { get; set; }
+    public string CurrentWorldName { get; set; } = string.Empty;
     public MountAutomationRole Role { get; set; } = MountAutomationRole.Solo;
     public uint TerritoryId { get; set; }
     public int VoucherCount { get; set; }
@@ -51,6 +53,8 @@ public static class SharedAccountCoordinator
         var charName = player.Name.ToString();
         var worldId = player.HomeWorld.RowId;
         var worldName = player.HomeWorld.ValueNullable?.Name.ToString() ?? string.Empty;
+        var currentWorldId = player.CurrentWorld.RowId;
+        var currentWorldName = player.CurrentWorld.ValueNullable?.Name.ToString() ?? worldName;
         var territory = Svc.ClientState.TerritoryType;
 
         var im = InventoryManager.Instance();
@@ -62,6 +66,8 @@ public static class SharedAccountCoordinator
             CharacterName = charName,
             WorldId = worldId,
             WorldName = worldName,
+            CurrentWorldId = currentWorldId,
+            CurrentWorldName = currentWorldName,
             Role = Plugin.Cfg.MountRole,
             TerritoryId = territory,
             VoucherCount = voucherCount,

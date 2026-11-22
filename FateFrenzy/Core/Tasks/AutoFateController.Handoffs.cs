@@ -86,12 +86,23 @@ internal sealed partial class AutoFateController
             owningSession.PendingMountExchange = false;
             Phase = AutoPhase.MountExchanging;
             Diag("Mount Exchange phase entering.");
-            RunTask(new AutoMountExchange(), () =>
+            var exchange = new AutoMountExchange();
+            RunTask(exchange, () =>
             {
                 if (owningSession != session)
                 {
                     Diag("AutoMountExchange finished: owning session is stale; not resuming.");
                     EndRun(owningSession);
+                    return;
+                }
+                if (!exchange.ExchangeSuccess)
+                {
+                    Diag("AutoMountExchange did not acquire whistle; resuming FATE grind instead of looping.");
+                    var resumeIndex = ResumeIndexFor(owningSession.PendingMountExchangeFromZone ?? owningSession.PendingVoucherHandoffFromZone);
+                    owningSession.PendingMountExchangeFromZone = null;
+                    owningSession.PendingVoucherHandoffFromZone = null;
+                    if (activeZones.Count > 0) ResumeGrindOrHumanize(owningSession, resumeIndex);
+                    else EndRun(owningSession);
                     return;
                 }
                 HandlePostFateHandoffs(owningSession);
@@ -106,12 +117,23 @@ internal sealed partial class AutoFateController
             owningSession.PendingRetainerUndercutOnly = false;
             Phase = AutoPhase.RetainerSelling;
             Diag($"Retainer Selling phase entering (undercutOnly={isUndercut}).");
-            RunTask(new AutoRetainerSell(isUndercut), () =>
+            var sellTask = new AutoRetainerSell(isUndercut);
+            RunTask(sellTask, () =>
             {
                 if (owningSession != session)
                 {
                     Diag("AutoRetainerSell finished: owning session is stale; not resuming.");
                     EndRun(owningSession);
+                    return;
+                }
+                if (!sellTask.ListingSuccess)
+                {
+                    Diag("AutoRetainerSell did not complete listing; resuming FATE grind instead of looping.");
+                    var resumeIndex = ResumeIndexFor(owningSession.PendingRetainerSellFromZone ?? owningSession.PendingMountExchangeFromZone);
+                    owningSession.PendingRetainerSellFromZone = null;
+                    owningSession.PendingMountExchangeFromZone = null;
+                    if (activeZones.Count > 0) ResumeGrindOrHumanize(owningSession, resumeIndex);
+                    else EndRun(owningSession);
                     return;
                 }
                 HandlePostFateHandoffs(owningSession);

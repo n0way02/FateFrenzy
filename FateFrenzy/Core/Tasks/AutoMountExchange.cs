@@ -20,11 +20,11 @@ public sealed class AutoMountExchange : AutoCommon
     private const uint MorDhonaTerritoryId = 156;
     private const uint EdelinaEnpcBaseId = 1036913;
 
-    // Converted world coordinates for Mor Dhona Map X: 22.2, Y: 4.8, Z: 0.5
-    // X_world = (22.2 - 1) * 51.2 - 1024 = 61.44f
-    // Y_world (height) = 0.5f
-    // Z_world = (4.8 - 1) * 51.2 - 1024 = -829.44f
-    private static readonly Vector3 EdelinaFallbackWorldPos = new(61.44f, 0.5f, -829.44f);
+    // Mor Dhona (Territory 156, SizeFactor 100) Revenant's Toll — Edelina at Map (X: 22.1, Y: 4.8)
+    // World X = (22.1 - 1.0) * 50.0 - 1024 = 31.0f
+    // World Y = 31.0f (Revenant's Toll ground elevation)
+    // World Z = (4.8 - 1.0) * 50.0 - 1024 = -834.0f
+    private static readonly Vector3 EdelinaFallbackWorldPos = new(31.0f, 31.0f, -834.0f);
 
     private const int TeleportWatchdogMs = 60_000;
     private const int MoveWatchdogMs = 120_000;
@@ -72,11 +72,17 @@ public sealed class AutoMountExchange : AutoCommon
             ErrorIf(!reached, $"Could not reach Mor Dhona (still in {Svc.ClientState.TerritoryType}); aborting mount exchange.");
         }
 
-        // 2. Resolve Edelina location (snap fallback to walkable floor via navmesh)
+        await WaitForNavmeshReady(60_000);
+        if (CancelToken.IsCancellationRequested) return;
+
+        // 2. Resolve Edelina location (snap fallback to walkable floor via navmesh with generous vertical range)
         var npc = RepairOps.FindNearestObjectByBaseId(EdelinaEnpcBaseId)
                ?? Svc.Objects.FirstOrDefault(o => o.Name.ToString().Equals("Edelina", StringComparison.OrdinalIgnoreCase));
         var rawPos = npc?.Position ?? EdelinaFallbackWorldPos;
-        var targetPos = NavmeshIPC.Instance.NearestPointReachable(rawPos, 15f, 15f) ?? rawPos;
+        var targetPos = NavmeshIPC.Instance.NearestPointReachable(rawPos, 20f, 40f) ?? rawPos;
+
+        if (Svc.Condition[ConditionFlag.Mounted])
+            await RunCancellable(new MoveOp(o => o.DismountNow()), 15_000, "mount-dismount");
 
         // 3. Walk on FOOT (GroundMove only, never fly into sky) to Edelina
         await RunWithStatusPinned("Walking to Edelina", async () =>
@@ -86,7 +92,7 @@ public sealed class AutoMountExchange : AutoCommon
                 allowTeleportIfFaster: false,
                 stopCondition: null,
                 allowAethernetWithinTerritory: false));
-            await RunCancellable(move, MoveWatchdogMs, "mount-walk");
+            await RunCancellable(move, MoveWatchdogMs, "mount-walk", StuckDetector.IdleStallAbort(StuckDetector.IdleStallTimeoutMs));
         });
 
         // 4. Find Edelina now that we're in render range and approach closer if needed
@@ -106,19 +112,19 @@ public sealed class AutoMountExchange : AutoCommon
 
         Status = "Interacting with Edelina";
         var interact = new MoveOp(o => o.Interact(npc!,
-            waitUntil: () => AnyEdelinaShopOpen() || ShopInteraction.SelectIconStringOpen(),
-            skip: UiSkipOptions.YesNo));
+            waitUntil: () => AnyEdelinaShopOpen() || ShopInteraction.SelectIconStringOpen() || IsSelectStringOpen(),
+            skip: UiSkipOptions.Talk));
         await RunCancellable(interact, InteractWaitMs, "mount-interact");
 
         ErrorIf(!await WaitUntilTimed(
-                () => AnyEdelinaShopOpen() || ShopInteraction.SelectIconStringOpen(),
+                () => AnyEdelinaShopOpen() || ShopInteraction.SelectIconStringOpen() || IsSelectStringOpen(),
                 ShopOpenWaitMs, "wait-edelina-menu"),
             "Edelina did not open a menu within timeout; aborting.");
 
-        // 5. If submenu open, pick "Turali Bicolor Gemstone" / "Bicolor" / "Voucher"
-        if (ShopInteraction.SelectIconStringOpen())
+        // 5. If submenu open, pick "Turali Bicolor Gemstone" FIRST (then fallback to "Bicolor" / "Voucher")
+        if (ShopInteraction.SelectIconStringOpen() || IsSelectStringOpen())
         {
-            await NavigateEdelinaMenu();
+            await NavigateEdelinaMenu(targetVoucherId);
         }
 
         ErrorIf(!AnyEdelinaShopOpen(),
@@ -242,23 +248,42 @@ public sealed class AutoMountExchange : AutoCommon
             Callback.Fire(iconStr, true, -1);
     }
 
-    private unsafe Task NavigateEdelinaMenu()
+    private static unsafe bool IsSelectStringOpen()
+        => GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectString, out var addon) && GenericHelpers.IsAddonReady(addon);
+
+    private unsafe Task NavigateEdelinaMenu(uint targetVoucherId)
     {
-        var count = ShopInteraction.SelectIconStringEntryCount();
-        Diag($"Edelina menu open with {count} options.");
+        // Turali Bicolor Gemstone Voucher = 43961 (Dawntrail — Ty'aitya Whistle).
+        // Edelina lists the Endwalker "Bicolor Gemstone Voucher" entry BEFORE "Turali Bicolor Gemstone Voucher",
+        // so we MUST search specifically for "Turali" in pass 1 before falling back to "Bicolor"/"Voucher"!
+        var preferTurali = targetVoucherId == 43961;
 
-        for (var i = 0; i < count; i++)
+        if (ShopInteraction.SelectIconStringOpen()
+            && GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectIconString, out var iconAddon)
+            && GenericHelpers.IsAddonReady(iconAddon))
         {
-            if (!ShopInteraction.SelectIconStringOpen()) break;
+            var master = new AddonMaster.SelectIconString(iconAddon);
+            Diag($"Edelina SelectIconString open with {master.Entries.Length} options.");
 
-            if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectIconString, out var addon)
-                && GenericHelpers.IsAddonReady(addon))
+            if (preferTurali)
             {
-                var master = new AddonMaster.SelectIconString(addon);
+                for (var i = 0; i < master.Entries.Length; i++)
+                {
+                    var text = master.Entries[i].Text;
+                    if (!string.IsNullOrEmpty(text) && text.Contains("Turali", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Diag($"Found Turali menu entry at index {i}: '{text}'");
+                        master.Entries[i].Select();
+                        return WaitUntilTimed(AnyEdelinaShopOpen, SubmenuWaitMs, "wait-turali-shop");
+                    }
+                }
+            }
+
+            for (var i = 0; i < master.Entries.Length; i++)
+            {
                 var text = master.Entries[i].Text;
                 if (!string.IsNullOrEmpty(text) &&
-                    (text.Contains("Turali", StringComparison.OrdinalIgnoreCase)
-                     || text.Contains("Bicolor", StringComparison.OrdinalIgnoreCase)
+                    (text.Contains("Bicolor", StringComparison.OrdinalIgnoreCase)
                      || text.Contains("Voucher", StringComparison.OrdinalIgnoreCase)))
                 {
                     Diag($"Found Bicolor menu entry at index {i}: '{text}'");
@@ -266,12 +291,46 @@ public sealed class AutoMountExchange : AutoCommon
                     return WaitUntilTimed(AnyEdelinaShopOpen, SubmenuWaitMs, "wait-bicolor-shop");
                 }
             }
-        }
 
-        if (ShopInteraction.SelectIconStringOpen())
+            if (master.Entries.Length > 0)
+            {
+                master.Entries[0].Select();
+                return WaitUntilTimed(AnyEdelinaShopOpen, SubmenuWaitMs, "wait-bicolor-shop-default");
+            }
+        }
+        else if (IsSelectStringOpen()
+            && GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectString, out var strAddon)
+            && GenericHelpers.IsAddonReady(strAddon))
         {
-            ShopInteraction.ClickSelectIconString(0);
-            return WaitUntilTimed(AnyEdelinaShopOpen, SubmenuWaitMs, "wait-bicolor-shop-default");
+            var master = new AddonMaster.SelectString(strAddon);
+            Diag($"Edelina SelectString open with {master.Entries.Length} options.");
+
+            if (preferTurali)
+            {
+                for (var i = 0; i < master.Entries.Length; i++)
+                {
+                    var text = master.Entries[i].Text;
+                    if (!string.IsNullOrEmpty(text) && text.Contains("Turali", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Diag($"Found Turali SelectString entry at index {i}: '{text}'");
+                        master.Entries[i].Select();
+                        return WaitUntilTimed(AnyEdelinaShopOpen, SubmenuWaitMs, "wait-turali-shop");
+                    }
+                }
+            }
+
+            for (var i = 0; i < master.Entries.Length; i++)
+            {
+                var text = master.Entries[i].Text;
+                if (!string.IsNullOrEmpty(text) &&
+                    (text.Contains("Bicolor", StringComparison.OrdinalIgnoreCase)
+                     || text.Contains("Voucher", StringComparison.OrdinalIgnoreCase)))
+                {
+                    Diag($"Found Bicolor SelectString entry at index {i}: '{text}'");
+                    master.Entries[i].Select();
+                    return WaitUntilTimed(AnyEdelinaShopOpen, SubmenuWaitMs, "wait-bicolor-shop");
+                }
+            }
         }
 
         return Task.CompletedTask;

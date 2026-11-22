@@ -3,16 +3,18 @@ using Dalamud.Game.ClientState.Conditions;
 using ECommons;
 using ECommons.Automation;
 using ECommons.DalamudServices;
+using ECommons.Throttlers;
 using ECommons.UIHelpers.AddonMasterImplementations;
 using FateFrenzy.Core.Game.Ops;
+using FateFrenzy.Core.Game.Player;
 using FateFrenzy.Core.Ipc;
 using FateFrenzy.Core.VoucherTrading;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace FateFrenzy.Core.Tasks;
@@ -21,36 +23,33 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
 {
     private readonly bool isUndercutOnly = isUndercutOnly;
 
-    private const int WorldTravelWatchdogMs = 120_000;
-    private const int MoveWatchdogMs = 60_000;
+    private const int TeleportWatchdogMs = 60_000;
+    private const int MoveWatchdogMs = 120_000;
+    private const int DismountWatchdogMs = 30_000;
+    private const int NavmeshReadyWaitMs = 60_000;
+    private const int EnterInnTimeoutMs = 60_000;
     private const int InteractWaitMs = 15_000;
-    private const int AddonWaitMs = 12_000;
+    private const int AddonWaitMs = 15_000;
     private const int ActionDelayMs = 600;
 
-    // Matches AutoRetainer's RetainerItemCommand signature:
-    // (AgentRetainer + 40, slot, InventoryType, 0, command=5 for HaveRetainerSellItem)
-    [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
-    private delegate void RetainerItemCommandDelegate(nint agentRetainerCommandModule, uint slot, InventoryType inventoryType, uint a4, long command);
-    private static RetainerItemCommandDelegate? retainerItemCommand;
-    private static bool retainerSigScanned;
+    // Limsa Lominsa Lower Decks (128) Hawkers' Alley Summoning Bell fallback when Private Inn is disabled
+    private const uint LimsaLowerDecksTerritoryId = 128;
+    private static readonly Vector3 LimsaBellFallbackPos = new(-123.5f, 18.0f, 19.8f);
 
-    private static void EnsureRetainerSigScan()
+    public bool ListingSuccess { get; private set; }
+
+    private readonly record struct InnInfo(uint CityTerritory, uint InnTerritory, uint InnkeeperDataId, Vector3 InnkeeperPos, string City);
+
+    private static unsafe InnInfo ResolveGrandCompanyInn()
     {
-        if (retainerSigScanned) return;
-        retainerSigScanned = true;
-        try
+        var ps = PlayerState.Instance();
+        var gc = ps is null ? 0 : ps->GrandCompany;
+        return gc switch
         {
-            var addr = Svc.SigScanner.ScanText("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 30 48 8B 5C 24 ?? 41 8B F0");
-            if (addr != nint.Zero)
-            {
-                retainerItemCommand = Marshal.GetDelegateForFunctionPointer<RetainerItemCommandDelegate>(addr);
-                Svc.Log.Info("[FateFrenzy] RetainerItemCommand function scanned successfully.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Svc.Log.Warning(ex, "[FateFrenzy] Could not scan RetainerItemCommand signature.");
-        }
+            GrandCompanyId.TwinAdder => new InnInfo(132, 179, 1000102, new Vector3(25.6627f, -8f, 99.74237f), "Gridania"),
+            GrandCompanyId.ImmortalFlames => new InnInfo(130, 178, 1001976, new Vector3(28.85994f, 6.999999f, -80.12716f), "Ul'dah"),
+            _ => new InnInfo(128, 177, 1000974, new Vector3(15.42688f, 39.99999f, 12.466553f), "Limsa Lominsa"),
+        };
     }
 
     protected override async Task Execute()
@@ -61,88 +60,62 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
         var homeWorld = player.HomeWorld.ValueNullable?.Name.ToString() ?? string.Empty;
         var currentWorld = player.CurrentWorld.ValueNullable?.Name.ToString() ?? string.Empty;
 
-        // 1. Ensure we are on Home World
+        // 1. Ensure we are on Home World (Retainers can only be accessed on Home World)
         if (!string.IsNullOrEmpty(homeWorld) && !currentWorld.Equals(homeWorld, StringComparison.OrdinalIgnoreCase))
         {
-            Status = $"Returning to Home World ({homeWorld})";
-            Diag($"Player is currently on {currentWorld}, moving to Home World {homeWorld}");
+            Svc.Chat.Print($"[FateFrenzy] Returning to Home World '{homeWorld}' to access Retainer...");
+            var arrived = false;
+            await RunWithStatusPinned($"Returning to Home World ({homeWorld})",
+                async () => arrived = await TravelToWorld(homeWorld, "retainer-home-world"));
 
-            Chat.SendMessage($"/li {homeWorld}");
-            var travelDeadline = Environment.TickCount64 + WorldTravelWatchdogMs;
-            while (Environment.TickCount64 < travelDeadline && !CancelToken.IsCancellationRequested)
-            {
-                await DelayMs(1000);
-                if (LifestreamIPC.IsBusy()) continue;
-
-                var cur = Svc.Objects.LocalPlayer?.CurrentWorld.ValueNullable?.Name.ToString();
-                if (cur != null && cur.Equals(homeWorld, StringComparison.OrdinalIgnoreCase))
-                {
-                    Diag("Arrived on Home World.");
-                    break;
-                }
-            }
-
-            if (!IsOnHomeWorld())
-            {
-                ErrorIf(true, $"Could not return to Home World {homeWorld} within timeout.");
-                return;
-            }
+            ErrorIf(!arrived, $"Could not return to Home World {homeWorld} within timeout.");
         }
 
-        // 2. Go to Inn if configured
-        if (Plugin.Cfg.MountUsePrivateInn && !IsInsideInn())
-        {
-            Status = "Retiring to Inn room for private retainer access";
-            var inn = new AutoReturnToInn();
-            var tcs = new TaskCompletionSource();
-            inn.Run(() => tcs.TrySetResult());
-            await tcs.Task;
-        }
+        // 2. Travel to a Summoning Bell (Private Inn room if enabled, otherwise Limsa Lominsa Hawkers' Alley)
+        await EnsureAtSummoningBell();
+        if (CancelToken.IsCancellationRequested) return;
 
         // 3. Locate Summoning Bell
         Status = "Searching for Summoning Bell";
         var bell = FindSummoningBell();
-        if (bell == null)
-        {
-            ErrorIf(true, "No Summoning Bell found nearby.");
-            return;
-        }
+        ErrorIf(bell is null, "No Summoning Bell found nearby.");
 
-        // 4. Approach and Interact with Bell
-        var bellPos = bell.Position;
-        if (Vector3.Distance(player.Position, bellPos) > 3.0f)
+        // 4. Approach and Interact with Bell (use fresh LocalPlayer position after zoning!)
+        var bellPos = bell!.Position;
+        var currentPos = Svc.Objects.LocalPlayer?.Position ?? Vector3.Zero;
+        if (Vector3.Distance(currentPos, bellPos) > 3.0f)
         {
+            await WaitForNavmeshReady(NavmeshReadyWaitMs);
+            if (CancelToken.IsCancellationRequested) return;
+
             Status = "Approaching Summoning Bell";
             var walk = new MoveOp(o => o.Move(Svc.ClientState.TerritoryType, bellPos,
-                MovementConfig.Everything.WithTolerance(2.0f),
+                MovementConfig.GroundMove.WithTolerance(2.0f),
                 allowTeleportIfFaster: false,
                 stopCondition: null,
                 allowAethernetWithinTerritory: false));
-            await RunCancellable(walk, MoveWatchdogMs, "bell-approach");
+            await RunCancellable(walk, MoveWatchdogMs, "bell-approach", StuckDetector.IdleStallAbort(StuckDetector.IdleStallTimeoutMs));
         }
 
         Status = "Interacting with Summoning Bell";
-        var interact = new MoveOp(o => o.Interact(bell, waitUntil: IsRetainerListOpen, skip: UiSkipOptions.None));
+        var interact = new MoveOp(o => o.Interact(bell, waitUntil: IsRetainerListOpen, skip: UiSkipOptions.Talk));
         await RunCancellable(interact, InteractWaitMs, "bell-interact");
 
         ErrorIf(!await WaitUntilTimed(IsRetainerListOpen, AddonWaitMs, "wait-retainer-list"),
             "Retainer list did not open.");
 
-        // 5. Select Retainer
+        // 5. Select Retainer and click through greeting Talk dialog until SelectString opens
         Status = $"Selecting Retainer #{Plugin.Cfg.MountRetainerIndex + 1}";
         await DelayMs(ActionDelayMs);
-        if (!SelectRetainerIndex(Plugin.Cfg.MountRetainerIndex))
-        {
-            ErrorIf(true, $"Failed to select Retainer index {Plugin.Cfg.MountRetainerIndex}.");
-            return;
-        }
+        ErrorIf(!SelectRetainerIndex(Plugin.Cfg.MountRetainerIndex),
+            $"Failed to select Retainer index {Plugin.Cfg.MountRetainerIndex}.");
 
-        ErrorIf(!await WaitUntilTimed(IsSelectStringOpen, AddonWaitMs, "wait-retainer-menu"),
-            "Retainer menu did not open.");
+        var menuOpened = await WaitForRetainerMainMenu(AddonWaitMs);
+        ErrorIf(!menuOpened, "Retainer menu (SelectString) did not open.");
 
         // 6. Fetch Universalis Prices & Compute Anti-Bait Price
         Status = "Querying Universalis market prices";
-        var itemId = Plugin.Cfg.MountTargetItemId; // 43590
+        var itemId = Plugin.Cfg.MountTargetItemId; // 43590 (Ty'aitya Whistle)
         var market = await UniversalisPriceService.GetListingsAsync(homeWorld, itemId, forceRefresh: true);
 
         var calculatedPrice = UniversalisPriceService.CalculateUndercutPrice(
@@ -158,35 +131,199 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
         if (!isUndercutOnly && whistleCount > 0)
         {
             Status = $"Listing Mount Whistle for {calculatedPrice:N0} gil";
-            await ProcessSellNewItem(itemId, (int)calculatedPrice);
+            ListingSuccess = await ProcessSellNewItem(itemId, (int)calculatedPrice);
         }
         else
         {
             Status = $"Checking and adjusting listing price to {calculatedPrice:N0} gil";
-            await ProcessAdjustPrice(itemId, (int)calculatedPrice);
+            ListingSuccess = await ProcessAdjustPrice(itemId, (int)calculatedPrice);
         }
 
-        // 8. Quit Retainer Menu
+        // 8. Quit Retainer Menu cleanly
         Status = "Closing Retainer";
         await ExitRetainerMenu();
         await DelayMs(ActionDelayMs);
 
-        Svc.Chat.Print($"[FateFrenzy] Retainer market update complete (Price: {calculatedPrice:N0} gil).");
+        if (ListingSuccess)
+        {
+            Svc.Chat.Print($"[FateFrenzy] Retainer market update complete! Listed at {calculatedPrice:N0} gil.");
+        }
+        else
+        {
+            Svc.Chat.PrintError("[FateFrenzy] Could not complete Retainer listing — check if Retainer has free market slots.");
+        }
     }
 
-    private static bool IsOnHomeWorld()
+    private async Task EnsureAtSummoningBell()
     {
-        var p = Svc.Objects.LocalPlayer;
-        if (p == null) return false;
-        var home = p.HomeWorld.ValueNullable?.Name.ToString();
-        var cur = p.CurrentWorld.ValueNullable?.Name.ToString();
-        return home != null && home.Equals(cur, StringComparison.OrdinalIgnoreCase);
+        if (Plugin.Cfg.MountUsePrivateInn)
+        {
+            if (IsInsideInn())
+            {
+                Diag("Already inside an Inn room.");
+                return;
+            }
+
+            var inn = ResolveGrandCompanyInn();
+            Svc.Chat.Print($"[FateFrenzy] Entering Private Inn room in {inn.City} for Retainer access...");
+
+            if (Svc.ClientState.TerritoryType != inn.CityTerritory)
+            {
+                var reached = false;
+                await RunWithStatusPinned($"Teleporting to {inn.City}",
+                    async () => reached = await TeleportToTerritory(inn.CityTerritory, Vector3.Zero, "retainer-inn-tp", TeleportWatchdogMs));
+                ErrorIf(!reached, $"Could not teleport to {inn.City} for Inn room.");
+            }
+
+            await WaitForNavmeshReady(NavmeshReadyWaitMs);
+            if (CancelToken.IsCancellationRequested) return;
+
+            if (Svc.Condition[ConditionFlag.Mounted])
+                await RunCancellable(new MoveOp(o => o.DismountNow()), DismountWatchdogMs, "retainer-inn-dismount");
+
+            Status = $"Walking to Innkeeper in {inn.City}";
+            var walk = new MoveOp(o => o.Move(inn.CityTerritory, inn.InnkeeperPos,
+                MovementConfig.Everything.WithTolerance(3.5f),
+                allowTeleportIfFaster: false,
+                stopCondition: () => CancelToken.IsCancellationRequested,
+                allowAethernetWithinTerritory: true));
+            await RunCancellable(walk, MoveWatchdogMs, "retainer-inn-walk", StuckDetector.IdleStallAbort(StuckDetector.IdleStallTimeoutMs));
+            if (CancelToken.IsCancellationRequested) return;
+
+            await EnterInnRoom(inn);
+            await DelayMs(1000);
+            return;
+        }
+
+        // Non-Inn mode: if no Summoning Bell is already nearby, teleport to Limsa Lominsa Lower Decks (Hawkers' Alley)
+        if (FindSummoningBell() is not null) return;
+
+        if (Svc.ClientState.TerritoryType != LimsaLowerDecksTerritoryId)
+        {
+            var reached = false;
+            await RunWithStatusPinned("Teleporting to Limsa Lominsa",
+                async () => reached = await TeleportToTerritory(LimsaLowerDecksTerritoryId, LimsaBellFallbackPos, "retainer-limsa-tp", TeleportWatchdogMs));
+            ErrorIf(!reached, "Could not teleport to Limsa Lominsa for Summoning Bell.");
+        }
+
+        await WaitForNavmeshReady(NavmeshReadyWaitMs);
+        if (CancelToken.IsCancellationRequested) return;
+
+        if (FindSummoningBell() is null)
+        {
+            Status = "Walking to Hawkers' Alley Summoning Bell";
+            var walk = new MoveOp(o => o.Move(LimsaLowerDecksTerritoryId, LimsaBellFallbackPos,
+                MovementConfig.GroundMove.WithTolerance(3.0f),
+                allowTeleportIfFaster: false,
+                stopCondition: () => FindSummoningBell() is not null,
+                allowAethernetWithinTerritory: true));
+            await RunCancellable(walk, MoveWatchdogMs, "retainer-limsa-bell-walk", StuckDetector.IdleStallAbort(StuckDetector.IdleStallTimeoutMs));
+        }
+    }
+
+    private async Task EnterInnRoom(InnInfo inn)
+    {
+        Status = $"Entering Private Inn in {inn.City}";
+        var deadline = Environment.TickCount64 + EnterInnTimeoutMs;
+        while (Environment.TickCount64 < deadline && !CancelToken.IsCancellationRequested)
+        {
+            if (Svc.ClientState.TerritoryType == inn.InnTerritory && !Svc.Condition[ConditionFlag.BetweenAreas] && !Svc.Condition[ConditionFlag.BetweenAreas51])
+            {
+                Diag($"Entered Inn room ({inn.InnTerritory}).");
+                return;
+            }
+
+            if (DriveInnDialogs())
+            {
+                await DelayMs(250);
+                continue;
+            }
+
+            var npc = RepairOps.FindObjectByBaseId(inn.InnkeeperDataId);
+            if (npc is null)
+            {
+                await DelayMs(250);
+                continue;
+            }
+
+            var player = Svc.Objects.LocalPlayer;
+            if (player is not null && Vector3.Distance(player.Position, npc.Position) > 5.0f)
+            {
+                var step = new MoveOp(o => o.Move(inn.CityTerritory, npc.Position,
+                    MovementConfig.GroundMove.WithTolerance(2.5f),
+                    allowTeleportIfFaster: false,
+                    stopCondition: () => CancelToken.IsCancellationRequested,
+                    allowAethernetWithinTerritory: false));
+                await RunCancellable(step, 25_000, "retainer-inn-approach", StuckDetector.IdleStallAbort(StuckDetector.IdleStallTimeoutMs));
+                continue;
+            }
+
+            var interact = new MoveOp(o => o.Interact(npc, waitUntil: AnyInnDialogOpen, skip: UiSkipOptions.Talk));
+            await RunCancellable(interact, 8_000, "retainer-inn-interact");
+            await DelayMs(500);
+        }
+
+        ErrorIf(!IsInsideInn(), $"Timed out entering Inn room in {inn.City}.");
+    }
+
+    private static unsafe bool AnyInnDialogOpen()
+        => (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectString, out var selectString) && GenericHelpers.IsAddonReady(selectString))
+        || (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectYesno, out var yesno) && GenericHelpers.IsAddonReady(yesno))
+        || (GenericHelpers.TryGetAddonByName<AtkUnitBase>("Talk", out var talk) && GenericHelpers.IsAddonReady(talk));
+
+    private static unsafe bool DriveInnDialogs()
+    {
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectString, out var ss) && GenericHelpers.IsAddonReady(ss))
+        {
+            if (EzThrottler.Throttle("AFG.RetainerInnSelectString", 600))
+            {
+                var m = new AddonMaster.SelectString((nint)ss);
+                if (m.EntryCount > 0) m.Entries[0].Select();
+            }
+            return true;
+        }
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectYesno, out var yn) && GenericHelpers.IsAddonReady(yn))
+        {
+            if (EzThrottler.Throttle("AFG.RetainerInnSelectYesno", 600))
+                new AddonMaster.SelectYesno((nint)yn).Yes();
+            return true;
+        }
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("Talk", out var tk) && GenericHelpers.IsAddonReady(tk))
+        {
+            if (EzThrottler.Throttle("AFG.RetainerInnTalk", 350))
+                new AddonMaster.Talk((nint)tk).Click();
+            return true;
+        }
+        return false;
+    }
+
+    private async Task<bool> WaitForRetainerMainMenu(int timeoutMs)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (Environment.TickCount64 < deadline && !CancelToken.IsCancellationRequested)
+        {
+            if (IsSelectStringOpen()) return true;
+            ClickTalkIfOpen();
+            await DelayMs(200);
+        }
+        return IsSelectStringOpen();
+    }
+
+    private static unsafe bool ClickTalkIfOpen()
+    {
+        if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("Talk", out var talk) && GenericHelpers.IsAddonReady(talk))
+        {
+            if (EzThrottler.Throttle("AFG.RetainerTalk", 300))
+                new AddonMaster.Talk((nint)talk).Click();
+            return true;
+        }
+        return false;
     }
 
     private static bool IsInsideInn()
     {
         var t = Svc.ClientState.TerritoryType;
-        return t is 177 or 178 or 179; // Limsa, Ul'dah, Gridania Inns
+        return t is 177 or 178 or 179 or 429 or 629 or 843 or 990 or 1205;
     }
 
     private static Dalamud.Game.ClientState.Objects.Types.IGameObject? FindSummoningBell()
@@ -296,8 +433,8 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
         for (var i = 0; i < menu.Entries.Length; i++)
         {
             var text = menu.Entries[i].Text;
-            if (text.Contains("Sell", StringComparison.OrdinalIgnoreCase) ||
-                text.Contains("Put Up", StringComparison.OrdinalIgnoreCase) ||
+            if (text.Contains("Put Up", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("Sell", StringComparison.OrdinalIgnoreCase) ||
                 text.Contains("Market", StringComparison.OrdinalIgnoreCase))
             {
                 if (!menu.Entries[i].Select())
@@ -373,8 +510,9 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
         }
     }
 
-    private async Task ProcessSellNewItem(uint itemId, int price)
+    private async Task<bool> ProcessSellNewItem(uint itemId, int price)
     {
+        var whistleBefore = CurrentWhistleCount(itemId);
         Diag("Selecting 'Sell items in your inventory on the market.' from Retainer menu...");
         ClickMenuEntryContaining("Sell items in your inventory");
         await DelayMs(ActionDelayMs * 2);
@@ -393,67 +531,48 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
         {
             Diag($"Could not find Mount Whistle (ID {itemId}) in player inventory.");
             CloseRetainerSellList();
-            return;
+            return false;
         }
 
-        EnsureRetainerSigScan();
-        var triggeredDirect = false;
-        if (retainerItemCommand != null)
-        {
-            await Svc.Framework.RunOnTick(() =>
-            {
-                unsafe
-                {
-                    var agent = AgentModule.Instance()->GetAgentByInternalId(AgentId.Retainer);
-                    if (agent != null && agent->IsAgentActive())
-                    {
-                        var cmdModule = (nint)agent + 40;
-                        Diag($"Calling AutoRetainer-style RetainerItemCommand (slot={slotInfo.Value.slot}, bag={slotInfo.Value.bag}, cmd=5 HaveRetainerSellItem)...");
-                        retainerItemCommand(cmdModule, (uint)slotInfo.Value.slot, slotInfo.Value.bag, 0, 5);
-                        triggeredDirect = true;
-                    }
-                }
-            });
-        }
+        var invAddonId = GetOpenInventoryAddonId();
+        Diag($"Found Whistle in bag {slotInfo.Value.bag} slot {slotInfo.Value.slot}. Opening inventory context menu (addonId={invAddonId})...");
+        await Svc.Framework.RunOnTick(() => TryOpenInventorySlotContextMenu(slotInfo.Value.bag, slotInfo.Value.slot, invAddonId));
 
-        if (!triggeredDirect)
-        {
-            var invAddonId = GetOpenInventoryAddonId();
-            Diag($"Fallback: Found Whistle in bag {slotInfo.Value.bag} slot {slotInfo.Value.slot}. Triggering inventory context menu (addonId={invAddonId})...");
-            await Svc.Framework.RunOnTick(() => TryOpenInventorySlotContextMenu(slotInfo.Value.bag, slotInfo.Value.slot, invAddonId));
-        }
-
-        // Wait for either ContextMenu or RetainerSell addon
-        var waitDialogDeadline = Environment.TickCount64 + 8000;
+        // Wait for ContextMenu -> select Put Up for Sale -> wait for RetainerSell
+        var waitDialogDeadline = Environment.TickCount64 + 10_000;
+        var contextClicked = false;
         while (Environment.TickCount64 < waitDialogDeadline && !CancelToken.IsCancellationRequested)
         {
             if (IsRetainerSellOpen())
-            {
                 break;
-            }
 
-            if (IsContextMenuOpen())
+            if (IsContextMenuOpen() && !contextClicked)
             {
-                Diag("ContextMenu detected; selecting sell entry...");
+                Diag("ContextMenu detected; selecting 'Put Up for Sale'...");
                 var selected = false;
                 await Svc.Framework.RunOnTick(() => selected = TrySelectSellFromContextMenu());
                 if (selected)
                 {
-                    await DelayMs(600);
+                    contextClicked = true;
+                    await DelayMs(500);
                 }
             }
 
             await DelayMs(200);
         }
 
-        // Set asking price and confirm sale
+        var listed = false;
         if (IsRetainerSellOpen())
         {
             Diag($"Setting asking price to {price:N0} gil...");
             await Svc.Framework.RunOnTick(() => TrySetRetainerSellPrice(price));
             await DelayMs(ActionDelayMs);
             await Svc.Framework.RunOnTick(() => ConfirmRetainerSell());
-            await DelayMs(ActionDelayMs * 2);
+
+            listed = await WaitUntilTimed(
+                () => CurrentWhistleCount(itemId) < whistleBefore || !IsRetainerSellOpen(),
+                8_000, "wait-whistle-listed");
+            await DelayMs(ActionDelayMs);
         }
         else
         {
@@ -464,25 +583,27 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
         CloseRetainerSellList();
         await DelayMs(ActionDelayMs);
         await WaitUntilTimed(IsSelectStringOpen, AddonWaitMs, "wait-return-to-retainer-menu");
+        return listed && CurrentWhistleCount(itemId) < whistleBefore;
     }
 
-    private async Task ProcessAdjustPrice(uint itemId, int price)
+    private async Task<bool> ProcessAdjustPrice(uint itemId, int price)
     {
-        Diag("Selecting 'Have retainer sell items on the market.' from Retainer menu...");
-        ClickMenuEntryContaining("Have retainer sell");
+        Diag("Selecting 'Sell items in your retainer's inventory on the market.' / 'Have retainer sell' from Retainer menu...");
+        if (!ClickMenuEntryContaining("Have retainer sell"))
+            ClickMenuEntryContaining("Sell items in your inventory");
         await DelayMs(ActionDelayMs * 2);
 
         if (!await WaitUntilTimed(IsRetainerSellListOpen, AddonWaitMs, "wait-retainer-sell-list"))
         {
             Diag("RetainerSellList did not open for price adjustment.");
-            return;
+            return false;
         }
 
-        // Click slot 0 in RetainerSellList
         Diag("Clicking item slot 0 in RetainerSellList...");
         ClickRetainerSellListSlot(0);
         await DelayMs(ActionDelayMs);
 
+        var adjusted = false;
         if (await WaitUntilTimed(IsRetainerSellOpen, AddonWaitMs, "wait-retainer-sell-price"))
         {
             if (TryGetRetainerSellPrice(out var curPrice))
@@ -490,29 +611,31 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
                 Diag($"RetainerSell open. Current asking price: {curPrice:N0}, target price: {price:N0}");
                 if (curPrice != price)
                 {
-                    TrySetRetainerSellPrice(price);
+                    await Svc.Framework.RunOnTick(() => TrySetRetainerSellPrice(price));
                     await DelayMs(ActionDelayMs);
-                    ConfirmRetainerSell();
+                    await Svc.Framework.RunOnTick(() => ConfirmRetainerSell());
                     await DelayMs(ActionDelayMs);
                 }
                 else
                 {
                     Diag("Asking price is already equal to target price; cancelling dialog.");
-                    CancelRetainerSell();
+                    await Svc.Framework.RunOnTick(() => CancelRetainerSell());
                     await DelayMs(ActionDelayMs);
                 }
+                adjusted = true;
             }
         }
 
         CloseRetainerSellList();
         await DelayMs(ActionDelayMs);
         await WaitUntilTimed(IsSelectStringOpen, AddonWaitMs, "wait-return-to-retainer-menu");
+        return adjusted;
     }
 
-    private static unsafe void ClickMenuEntryContaining(string text)
+    private static unsafe bool ClickMenuEntryContaining(string text)
     {
         if (!GenericHelpers.TryGetAddonByName<AtkUnitBase>(AfgConstants.AddonNames.SelectString, out var addon) || !GenericHelpers.IsAddonReady(addon))
-            return;
+            return false;
 
         var master = new AddonMaster.SelectString(addon);
         for (var i = 0; i < master.Entries.Length; i++)
@@ -520,15 +643,23 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
             if (master.Entries[i].Text.Contains(text, StringComparison.OrdinalIgnoreCase))
             {
                 master.Entries[i].Select();
-                return;
+                return true;
             }
         }
+        return false;
     }
 
     private async Task ExitRetainerMenu()
     {
         ClickMenuEntryContaining("Quit");
-        await DelayMs(ActionDelayMs);
+
+        var deadline = Environment.TickCount64 + 8_000;
+        while (Environment.TickCount64 < deadline && !CancelToken.IsCancellationRequested)
+        {
+            if (IsRetainerListOpen()) break;
+            ClickTalkIfOpen();
+            await DelayMs(200);
+        }
 
         CloseRetainerList();
     }

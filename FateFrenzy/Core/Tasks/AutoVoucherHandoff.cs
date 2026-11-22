@@ -72,6 +72,23 @@ public sealed class AutoVoucherHandoff(string partnerName) : AutoCommon
         var transferQty = Math.Max(Plugin.Cfg.MountSupplierThreshold, initialVouchers);
 
         Diag($"AutoVoucherHandoff started with partner '{partnerName}' at Mor Dhona meeting coordinates (22.4, 7.9, 0.5). Role: {Plugin.Cfg.MountRole}, Current vouchers: {initialVouchers}");
+
+        // 0. Ensure BOTH characters are on the same World (Master Seller's Home World) BEFORE travelling to Mor Dhona
+        var meetingWorld = ResolveMeetingWorld(isSupplier);
+        if (!string.IsNullOrEmpty(meetingWorld))
+        {
+            var curWorld = Svc.Objects.LocalPlayer?.CurrentWorld.ValueNullable?.Name.ToString() ?? string.Empty;
+            if (!curWorld.Equals(meetingWorld, StringComparison.OrdinalIgnoreCase))
+            {
+                Svc.Chat.Print($"[FateFrenzy] Traveling to meeting world '{meetingWorld}' before meeting {partnerName} in Mor Dhona...");
+                var arrived = false;
+                await RunWithStatusPinned($"Traveling to {meetingWorld}",
+                    async () => arrived = await TravelToWorld(meetingWorld, "handoff-world-travel"));
+
+                ErrorIf(!arrived, $"Could not travel to meeting world '{meetingWorld}' within timeout.");
+            }
+        }
+
         Svc.Chat.Print($"[FateFrenzy] Travelling to Mor Dhona meeting spot (X: 22.4, Y: 7.9) to trade vouchers with {partnerName}...");
 
         // 1. Travel to Mor Dhona
@@ -83,6 +100,9 @@ public sealed class AutoVoucherHandoff(string partnerName) : AutoCommon
 
             ErrorIf(!reached, $"Could not reach Mor Dhona (still in {Svc.ClientState.TerritoryType}).");
         }
+
+        await WaitForNavmeshReady(60_000);
+        if (CancelToken.IsCancellationRequested) return;
 
         // 2. Resolve standable ground position near (71.68f, 0.5f, -670.72f)
         var floorPos = NavmeshIPC.Instance.NearestPointReachable(MeetingSpotWorldPos, 15f, 15f) ?? MeetingSpotWorldPos;
@@ -480,5 +500,23 @@ public sealed class AutoVoucherHandoff(string partnerName) : AutoCommon
     {
         var im = InventoryManager.Instance();
         return im != null ? im->GetInventoryItemCount(voucherItemId, false, false, false) : 0;
+    }
+
+    private string ResolveMeetingWorld(bool isSupplier)
+    {
+        // Always meet on Master Seller's Home World so Master Seller is already home for Retainer listing afterwards.
+        if (!isSupplier)
+        {
+            return Svc.Objects.LocalPlayer?.HomeWorld.ValueNullable?.Name.ToString() ?? string.Empty;
+        }
+
+        var partners = SharedAccountCoordinator.GetActivePartners(Plugin.Cfg.MountPartnerNames);
+        var master = partners.FirstOrDefault(p => p.CharacterName.Equals(partnerName, StringComparison.OrdinalIgnoreCase))
+                  ?? partners.FirstOrDefault(p => p.Role == MountAutomationRole.MasterSeller);
+
+        if (master != null && !string.IsNullOrEmpty(master.WorldName))
+            return master.WorldName;
+
+        return Svc.Objects.LocalPlayer?.HomeWorld.ValueNullable?.Name.ToString() ?? string.Empty;
     }
 }

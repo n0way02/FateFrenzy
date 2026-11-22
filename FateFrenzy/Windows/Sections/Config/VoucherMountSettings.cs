@@ -114,7 +114,11 @@ internal static class VoucherMountSettings
             foreach (var partner in partners)
             {
                 var readyText = partner.IsReadyForTrade ? " [READY AT MEETING SPOT]" : "";
-                ImGui.BulletText($"{partner.CharacterName} ({partner.WorldName}) - Role: {partner.Role} - Vouchers: {partner.VoucherCount}{readyText}");
+                var curWorldText = !string.IsNullOrEmpty(partner.CurrentWorldName)
+                    && !partner.CurrentWorldName.Equals(partner.WorldName, StringComparison.OrdinalIgnoreCase)
+                    ? $" [on {partner.CurrentWorldName}]"
+                    : "";
+                ImGui.BulletText($"{partner.CharacterName} ({partner.WorldName}{curWorldText}) - Role: {partner.Role} - Vouchers: {partner.VoucherCount}{readyText}");
             }
         }
     }

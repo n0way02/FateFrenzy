@@ -1,5 +1,7 @@
 using FateFrenzy.Core.Ipc;
 using clib.TaskSystem;
+using Dalamud.Game.ClientState.Conditions;
+using ECommons.Automation;
 using ECommons.DalamudServices;
 using System;
 using System.Threading.Tasks;
@@ -78,5 +80,59 @@ public abstract partial class AutoCommon : TaskBase
                 : "Please wait — navmesh is loading…";
             await NextFrame(pollFrames);
         }
+    }
+
+    internal async Task<bool> TravelToWorld(string targetWorldName, string scope, int timeoutMs = 180_000)
+    {
+        if (string.IsNullOrWhiteSpace(targetWorldName)) return true;
+
+        static bool IsOnWorld(string world)
+        {
+            var cur = Svc.Objects.LocalPlayer?.CurrentWorld.ValueNullable?.Name.ToString();
+            return !string.IsNullOrEmpty(cur) && cur.Equals(world, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (IsOnWorld(targetWorldName))
+        {
+            Diag($"{scope}: already on target world '{targetWorldName}'.");
+            return true;
+        }
+
+        for (var attempt = 1; attempt <= 2 && !CancelToken.IsCancellationRequested; attempt++)
+        {
+            var currentWorld = Svc.Objects.LocalPlayer?.CurrentWorld.ValueNullable?.Name.ToString() ?? "?";
+            Status = $"Traveling to world {targetWorldName}";
+            Diag($"{scope}#{attempt}: currently on '{currentWorld}', traveling to '{targetWorldName}' via '/li {targetWorldName}'.");
+
+            await PrepareForTeleport($"{scope}-world#{attempt}");
+            if (CancelToken.IsCancellationRequested) return false;
+
+            Chat.ExecuteCommand($"/li {targetWorldName}");
+            await DelayMs(1500);
+
+            var deadline = Environment.TickCount64 + timeoutMs;
+            while (Environment.TickCount64 < deadline && !CancelToken.IsCancellationRequested)
+            {
+                var zoning = Svc.Condition[ConditionFlag.BetweenAreas] || Svc.Condition[ConditionFlag.BetweenAreas51];
+                if (!zoning && !LifestreamIPC.IsBusy() && Svc.Objects.LocalPlayer is not null && IsOnWorld(targetWorldName))
+                {
+                    await DelayMs(1500);
+                    Diag($"{scope}: arrived on world '{targetWorldName}'.");
+                    return true;
+                }
+                await DelayMs(500);
+            }
+
+            if (IsOnWorld(targetWorldName))
+            {
+                await DelayMs(1500);
+                return true;
+            }
+
+            Warn($"{scope}#{attempt}: did not arrive on world '{targetWorldName}' within {timeoutMs / 1000}s.");
+            await DelayMs(2000);
+        }
+
+        return IsOnWorld(targetWorldName);
     }
 }
