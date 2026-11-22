@@ -1,9 +1,11 @@
 --[=====[
 [[SND Metadata]]
 author: n0way (fork from pot0to script)
-version: 3.2.5
+version: 3.2.6
 description: >-
   Fate farming script with the following features:
+
+  - *[NEW - 3.2.6]* Updated Web Tracker & GPS telemetry endpoint to n0wayplugins.discloud.app.
 
   - *[NEW - 3.2.5]* Fixed real-time GPS & Map direct-to-RAM streaming (/api/gps) with curl.exe fallback, live TerritoryType zone detection, and full active FATEs list.
 
@@ -198,6 +200,8 @@ configs:
 *                                  Changelog                                   *
 ********************************************************************************
 
+    -> 3.2.6    by: n0way02 (https://ko-fi.com/n0way02)
+                Updated Web Tracker & GPS telemetry endpoint to n0wayplugins.discloud.app.
     -> 3.2.5    by: n0way02 (https://ko-fi.com/n0way02)
                 Fixed real-time GPS & Map direct-to-RAM streaming (/api/gps) with curl.exe fallback, live TerritoryType zone detection, and full active FATEs list.
     -> 3.2.4    by: n0way02 (https://ko-fi.com/n0way02)
@@ -4456,7 +4460,7 @@ while not StopScript do
 
             if playerName and serverName then
                 local jsonBody = string.format(
-                    '{"playerName":"%s","source":"script","isPlugin":false,"clientType":"FateFarming.Lua","version":"3.2.5","serverName":"%s","currentServer":"%s","currentMap":"%s","territoryId":%d,"posX":%.2f,"posY":%.2f,"posZ":%.2f,"rotation":%.3f,"isMounted":%s,"activeFates":%s,"classJob":"%s","level":%d,"phase":"Grinding","state":"Active","walletGemstones":%d,"gemstonesFarmed":%d,"fatesCompleted":%d,"fatesPerHour":%.1f,"expEarned":0,"expPerHour":0,"levelsGained":0,"sessionDurationMs":%d,"selectedTradeItem":"%s","tradeItems":%s}',
+                    '{"playerName":"%s","source":"script","isPlugin":false,"clientType":"FateFarming.Lua","version":"3.2.6","serverName":"%s","currentServer":"%s","currentMap":"%s","territoryId":%d,"posX":%.2f,"posY":%.2f,"posZ":%.2f,"rotation":%.3f,"isMounted":%s,"activeFates":%s,"classJob":"%s","level":%d,"phase":"Grinding","state":"Active","walletGemstones":%d,"gemstonesFarmed":%d,"fatesCompleted":%d,"fatesPerHour":%.1f,"expEarned":0,"expPerHour":0,"levelsGained":0,"sessionDurationMs":%d,"selectedTradeItem":"%s","tradeItems":%s}',
                     playerName, serverName, currentServer, safeMap, terrId, px, py, pz, rot, mountedStr, fatesJson, jobAbbr, charLevel, walletGems, gemsFarmed, fatesDone, fatesPerHour, sessionDurMs, safeTrade, tradeItemsJson
                 )
                 -- Try C# HttpClient first, fallback to curl.exe
