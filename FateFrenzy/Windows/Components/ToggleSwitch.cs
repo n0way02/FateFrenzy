@@ -8,11 +8,11 @@ internal static class ToggleSwitch
 {
     public static bool Draw(string id, ref bool value)
     {
-        var accent = Styling.AccentViolet;
-        var trackWidth = 38f * ImGuiHelpers.GlobalScale;
-        var trackHeight = 20f * ImGuiHelpers.GlobalScale;
-        var knobRadius = (trackHeight - 4f * ImGuiHelpers.GlobalScale) * 0.5f;
-        var padX = 3f * ImGuiHelpers.GlobalScale;
+        var scale = ImGuiHelpers.GlobalScale;
+        var trackWidth = 40f * scale;
+        var trackHeight = 20f * scale;
+        var knobRadius = (trackHeight - 5f * scale) * 0.5f;
+        var padX = 3f * scale;
 
         var origin = ImGui.GetCursorScreenPos();
         var end = origin + new Vector2(trackWidth, trackHeight);
@@ -20,12 +20,15 @@ internal static class ToggleSwitch
         var hovered = ImGui.IsMouseHoveringRect(origin, end);
 
         var trackColor = value
-            ? Vector4.Lerp(accent * 0.7f, accent, hovered ? 0.6f : 0.3f)
-            : Vector4.Lerp(Styling.CardBgSoft, Styling.CardBgHover, hovered ? 1f : 0f);
-        var knobColor = value ? Styling.TextStrong : Styling.TextSecondary;
+            ? (hovered ? Styling.BrandYellowSoft : Styling.BrandYellow)
+            : (hovered ? Styling.CardBgHover : Styling.SliderBg);
+        var borderColor = value
+            ? Styling.BrandYellow
+            : (hovered ? Styling.BorderGlow : Styling.BorderDim);
+        var knobColor = value ? Styling.WindowBg : Styling.TextSecondary;
 
         dl.AddRectFilled(origin, end, ImGui.GetColorU32(trackColor), trackHeight * 0.5f);
-        dl.AddRect(origin, end, ImGui.GetColorU32(value ? accent : Styling.BorderDim), trackHeight * 0.5f);
+        dl.AddRect(origin, end, ImGui.GetColorU32(borderColor), trackHeight * 0.5f);
 
         var knobX = value ? end.X - knobRadius - padX : origin.X + knobRadius + padX;
         var knobY = origin.Y + trackHeight * 0.5f;

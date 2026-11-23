@@ -70,18 +70,37 @@ internal static class SettingsRow
         Styling.VSpace(CaptionBottomGap);
     }
 
-    // Card-padded wrapped text for inline notes, warnings, and previews inside a group.
+    // Card-padded wrapped text for inline notes, warnings, and previews inside a group (Lightless dark inset box).
+    // NOTE: Must NEVER call ChannelsSplit here because SettingsGroup already owns an active ChannelsSplit(2)!
     public static void Note(string text, Vector4? color = null)
     {
+        var scale = ImGuiHelpers.GlobalScale;
         Styling.VSpace(NoteTopGap);
-        var wrapLocalX = ImGui.GetCursorPosX() + (SettingsGroup.ContentRightEdge - ImGui.GetCursorScreenPos().X);
+
+        var origin = ImGui.GetCursorScreenPos();
+        var boxWidth = MathF.Max(60f, SettingsGroup.ContentRightEdge - origin.X);
+        var padX = 10f * scale;
+        var padY = 7f * scale;
+        var wrapWidth = MathF.Max(40f, boxWidth - padX * 2f);
+
+        var textSize = ImGui.CalcTextSize(text, false, wrapWidth);
+        var boxEnd = new Vector2(origin.X + boxWidth, origin.Y + textSize.Y + padY * 2f);
+
+        var dl = ImGui.GetWindowDrawList();
+        dl.AddRectFilled(origin, boxEnd, ImGui.GetColorU32(Styling.DescBoxBg), 6f * scale);
+        dl.AddRect(origin, boxEnd, ImGui.GetColorU32(Styling.Hairline), 6f * scale);
+
+        ImGui.SetCursorScreenPos(origin + new Vector2(padX, padY));
+        var wrapLocalX = ImGui.GetCursorPosX() + wrapWidth;
         ImGui.PushTextWrapPos(wrapLocalX);
-        using (ImRaii.PushColor(ImGuiCol.Text, color ?? Styling.TextMuted))
+        using (ImRaii.PushColor(ImGuiCol.Text, color ?? Styling.TextDim))
         {
             ImGui.TextUnformatted(text);
         }
-
         ImGui.PopTextWrapPos();
+
+        ImGui.SetCursorScreenPos(new Vector2(origin.X, boxEnd.Y));
+        ImGui.Dummy(new Vector2(boxWidth, 0f));
         Styling.VSpace(NoteBottomGap);
     }
 

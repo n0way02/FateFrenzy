@@ -10,7 +10,8 @@ internal static class SidebarTab
 {
     public static bool Draw(string label, FontAwesomeIcon icon, Vector4 accent, bool selected)
     {
-        var height = 40f * ImGuiHelpers.GlobalScale;
+        var scale = ImGuiHelpers.GlobalScale;
+        var height = 34f * scale;
         var width = ImGui.GetContentRegionAvail().X;
 
         var origin = ImGui.GetCursorScreenPos();
@@ -18,16 +19,24 @@ internal static class SidebarTab
         var dl = ImGui.GetWindowDrawList();
         var hovered = ImGui.IsMouseHoveringRect(origin, end);
 
-        var bg = selected
-            ? Styling.WithAlpha(accent, 0.12f)
-            : hovered ? Styling.WithAlpha(accent, 0.05f) : new Vector4(0, 0, 0, 0);
+        if (selected)
+        {
+            var bg = Styling.WithAlpha(Styling.BrandPurple, 0.34f);
+            dl.AddRectFilled(origin, end, ImGui.GetColorU32(bg), 7f * scale);
+            dl.AddRect(origin, end, ImGui.GetColorU32(Styling.WithAlpha(Styling.BrandPurpleGlow, 0.45f)), 7f * scale, ImDrawFlags.None, 1f);
 
-        var borderCol = selected ? accent : (hovered ? Styling.WithAlpha(accent, 0.20f) : Styling.BorderDim);
+            // Crisp electric yellow left accent indicator bar (Lightless-inspired active marker)
+            var barMin = new Vector2(origin.X + 2f * scale, origin.Y + 6f * scale);
+            var barMax = new Vector2(origin.X + 5f * scale, end.Y - 6f * scale);
+            dl.AddRectFilled(barMin, barMax, ImGui.GetColorU32(Styling.BrandYellow), 2f * scale);
+        }
+        else if (hovered)
+        {
+            var bg = Styling.WithAlpha(Styling.BrandPurple, 0.16f);
+            dl.AddRectFilled(origin, end, ImGui.GetColorU32(bg), 7f * scale);
+        }
 
-        dl.AddRectFilled(origin, end, ImGui.GetColorU32(bg), 8f);
-        dl.AddRect(origin, end, ImGui.GetColorU32(borderCol), 8f, ImDrawFlags.None, selected ? 1.5f : 1.0f);
-
-        var padX = 14f * ImGuiHelpers.GlobalScale;
+        var padX = 13f * scale;
         var iconStr = icon.ToIconString();
         Vector2 iconSize;
         using (ImRaii.PushFont(UiBuilder.IconFont))
@@ -36,15 +45,15 @@ internal static class SidebarTab
         var iconPos = new Vector2(origin.X + padX, origin.Y + (height - iconSize.Y) * 0.5f);
         ImGui.SetCursorScreenPos(iconPos);
         using (ImRaii.PushFont(UiBuilder.IconFont))
-        using (ImRaii.PushColor(ImGuiCol.Text, selected ? accent : Styling.TextSecondary))
+        using (ImRaii.PushColor(ImGuiCol.Text, selected ? Styling.BrandYellow : (hovered ? Styling.AccentVioletSoft : Styling.TextDim)))
             ImGui.TextUnformatted(iconStr);
 
         var labelSize = ImGui.CalcTextSize(label);
         var labelPos = new Vector2(
-            origin.X + padX + iconSize.X + 10f * ImGuiHelpers.GlobalScale,
+            origin.X + padX + 22f * scale,
             origin.Y + (height - labelSize.Y) * 0.5f);
         ImGui.SetCursorScreenPos(labelPos);
-        using (ImRaii.PushColor(ImGuiCol.Text, selected ? Styling.TextStrong : Styling.TextSecondary))
+        using (ImRaii.PushColor(ImGuiCol.Text, selected ? Styling.TextStrong : (hovered ? Styling.TextSecondary : Styling.TextDim)))
             ImGui.TextUnformatted(label);
 
         ImGui.SetCursorScreenPos(origin);

@@ -1,20 +1,22 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
+using System;
 using System.Numerics;
 
 namespace FateFrenzy.Windows.Components;
 
 internal sealed class SettingsGroup : IDisposable
 {
-    private const float PaddingX = 12f;
-    private const float PaddingY = 6f;
+    private const float PaddingX = 14f;
+    private const float PaddingY = 9f;
     private const float GroupGap = 14f;
     private const float FootnoteFontScale = 0.92f;
     private const float FootnotePullUp = 6f;
     private const float FootnoteIndent = 4f;
 
     internal static float ContentRightEdge { get; private set; }
+    internal static float ContentLeftEdge { get; private set; }
     internal static bool RowDrawnInGroup;
 
     private readonly Vector2 cardOrigin;
@@ -25,7 +27,7 @@ internal sealed class SettingsGroup : IDisposable
         if (title.Length > 0)
         {
             Styling.SectionLabel(title);
-            Styling.VSpace(2f);
+            Styling.VSpace(4f);
         }
 
         return new SettingsGroup();
@@ -36,6 +38,7 @@ internal sealed class SettingsGroup : IDisposable
         var scale = ImGuiHelpers.GlobalScale;
         cardOrigin = ImGui.GetCursorScreenPos();
         cardWidth = ImGui.GetContentRegionAvail().X;
+        ContentLeftEdge = cardOrigin.X + PaddingX * scale;
         ContentRightEdge = cardOrigin.X + cardWidth - PaddingX * scale;
         RowDrawnInGroup = false;
 
@@ -56,8 +59,8 @@ internal sealed class SettingsGroup : IDisposable
         var drawList = ImGui.GetWindowDrawList();
         drawList.ChannelsSetCurrent(0);
         var rounding = Styling.CardRounding * scale;
-        drawList.AddRectFilled(cardOrigin, cardEnd, ImGui.GetColorU32(Styling.CardBgSoft), rounding);
-        drawList.AddRect(cardOrigin, cardEnd, ImGui.GetColorU32(Styling.WithAlpha(Styling.BorderDim, 0.55f)), rounding);
+        drawList.AddRectFilled(cardOrigin, cardEnd, ImGui.GetColorU32(Styling.CardBg), rounding);
+        drawList.AddRect(cardOrigin, cardEnd, ImGui.GetColorU32(Styling.BorderDim), rounding, ImDrawFlags.None, 1f);
         drawList.ChannelsMerge();
 
         ImGui.SetCursorScreenPos(new Vector2(cardOrigin.X, cardEnd.Y));
@@ -81,8 +84,8 @@ internal sealed class SettingsGroup : IDisposable
         Styling.VSpace(GroupGap);
     }
 
-    // Local-coordinate X of the card's inner right edge, so block content (reorder buttons, etc.)
-    // can right-align to the card border instead of the wider window content region.
+    // Inside BeginGroup(), ImGui.SameLine(offset) positions at GroupStartX (= ContentLeftEdge) + offset,
+    // so returning (ContentRightEdge - ContentLeftEdge) aligns every right-edge control pixel-perfectly to ContentRightEdge.
     public static float InnerRightLocalX()
-        => ImGui.GetCursorPosX() + (ContentRightEdge - ImGui.GetCursorScreenPos().X);
+        => ContentRightEdge - ContentLeftEdge;
 }

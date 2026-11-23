@@ -8,6 +8,8 @@ public enum ExternalPlugin
     Vnavmesh,
     BossMod,
     TextAdvance,
+    Lifestream,
+    RotationSolver,
 }
 
 public sealed record ExternalPluginInfo(
@@ -31,18 +33,31 @@ public static class ExternalPlugins
             Purpose: "Pathfinding and movement to FATEs.",
             Required: true),
         [ExternalPlugin.BossMod] = new(
-            InternalName: "BossMod",
-            DisplayName: "BossMod",
-            RepoUrl: "https://puni.sh/api/repository/veyn",
+            InternalName: "BossModReborn",
+            DisplayName: "BossMod Reborn",
+            RepoUrl: "https://raw.githubusercontent.com/FFXIV-CombatReborn/CombatRebornRepo/main/pluginmaster.json",
             Purpose: "Auto-rotation, targeting, and dodging during FATE combat.",
             Required: true,
-            Aliases: ["BossModReborn"]),
+            Aliases: ["BossMod"]),
         [ExternalPlugin.TextAdvance] = new(
             InternalName: "TextAdvance",
             DisplayName: "TextAdvance",
             RepoUrl: "https://raw.githubusercontent.com/NightmareXIV/MyDalamudPlugins/main/pluginmaster.json",
             Purpose: "Talk-skip during Collect FATE turn-ins (scoped, only enabled mid-Collect).",
             Required: true),
+        [ExternalPlugin.Lifestream] = new(
+            InternalName: "Lifestream",
+            DisplayName: "Lifestream",
+            RepoUrl: "https://raw.githubusercontent.com/NightmareXIV/MyDalamudPlugins/main/pluginmaster.json",
+            Purpose: "Instance hopping, local aetheryte travel, and cross-world visits.",
+            Required: false),
+        [ExternalPlugin.RotationSolver] = new(
+            InternalName: "RotationSolver",
+            DisplayName: "Rotation Solver Reborn",
+            RepoUrl: "https://raw.githubusercontent.com/FFXIV-CombatReborn/CombatRebornRepo/main/pluginmaster.json",
+            Purpose: "Optional automated combat rotation solver.",
+            Required: false,
+            Aliases: ["RotationSolverReborn"]),
     };
 
     public static IEnumerable<ExternalPlugin> All => Catalog.Keys;
@@ -52,8 +67,8 @@ public static class ExternalPlugins
         var info = Catalog[plugin];
         return Svc.PluginInterface.InstalledPlugins.Any(p =>
             p.IsLoaded
-            && (p.InternalName == info.InternalName
-                || (info.Aliases is not null && Array.IndexOf(info.Aliases, p.InternalName) >= 0)));
+            && (p.InternalName.Equals(info.InternalName, StringComparison.OrdinalIgnoreCase)
+                || (info.Aliases is not null && info.Aliases.Any(a => p.InternalName.Equals(a, StringComparison.OrdinalIgnoreCase)))));
     }
 
     public static bool AllRequiredInstalled()

@@ -27,12 +27,30 @@ public sealed class MainWindow : Window, IDisposable
 
     public void Dispose() { }
 
+    public override void PreDraw()
+    {
+        ImGui.PushStyleColor(ImGuiCol.WindowBg, Styling.WindowBg);
+        ImGui.PushStyleColor(ImGuiCol.TitleBg, Styling.TopBarBg);
+        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, new Vector4(0.11f, 0.04f, 0.21f, 1.00f));
+    }
+
+    public override void PostDraw()
+    {
+        ImGui.PopStyleColor(3);
+    }
+
     public override void Draw()
     {
         var cfg = plugin.Configuration;
         var ctrl = plugin.Controller;
 
         using var style = Styling.PushWindowStyle();
+
+        // Subtle Lightless-style ambient purple dot-grid glow at the top of the main window
+        var dl = ImGui.GetWindowDrawList();
+        var winMin = ImGui.GetWindowPos();
+        var winSize = ImGui.GetWindowSize();
+        Styling.DrawAmbientDotGrid(dl, winMin, winMin + new Vector2(winSize.X, MathF.Min(winSize.Y, 260f)), 16f);
 
         DependencyBanner.Draw(plugin);
 
