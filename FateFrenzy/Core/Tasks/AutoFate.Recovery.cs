@@ -228,8 +228,8 @@ public sealed partial class AutoFate
                 skip: UiSkipOptions.Talk | UiSkipOptions.YesNo));
             await RunCancellable(interact, NpcSpawnTimeoutMs, $"activate-interact-{fate.Id}");
 
-            // Clear the friendly start NPC target as soon as the FATE activates so we don't keep targeting the NPC during combat.
-            if (Svc.Targets.Target is not null && Svc.Targets.Target is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc)
+            // Clear the friendly start NPC target (EventNpc or friendly ally BattleNpc) as soon as the FATE activates.
+            if (Svc.Targets.Target is not null && !FateMobScanner.IsHostileBattleNpc(Svc.Targets.Target))
                 Svc.Targets.Target = null;
 
             // After talking to the start NPC (often standing on the outer rim of the FATE),

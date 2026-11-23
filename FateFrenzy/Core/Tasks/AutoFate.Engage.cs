@@ -449,7 +449,7 @@ public sealed partial class AutoFate
             if (FateMobScanner.TryFindNearestMob(fateId, moving.Position, out var liveMob, out _, out var live)
                 && live <= reachMeters)
             {
-                if (liveMob is not null && Svc.Targets.Target is not IBattleNpc)
+                if (liveMob is not null && !FateMobScanner.IsHostileBattleNpc(Svc.Targets.Target))
                     Svc.Targets.Target = liveMob;
                 return true;
             }
@@ -467,7 +467,7 @@ public sealed partial class AutoFate
 
     private static unsafe bool IsValidFateTarget(IBattleNpc targetNpc, uint fateId, Vector3 fatePos, float fateRadius)
     {
-        if (!targetNpc.IsTargetable || targetNpc.CurrentHp == 0) return false;
+        if (!FateMobScanner.IsHostileBattleNpc(targetNpc)) return false;
 
         var name = targetNpc.Name.ToString();
         if (name.Equals("Forlorn Maiden", StringComparison.OrdinalIgnoreCase) ||
@@ -479,8 +479,7 @@ public sealed partial class AutoFate
         var native = (CSGameObject*)targetNpc.Address;
         if (native->FateId == fateId) return true;
 
-        if (native->BattleNpcSubKind == BattleNpcSubKind.Combatant &&
-            Vector3.Distance(targetNpc.Position, fatePos) <= fateRadius + 10f)
+        if (Vector3.Distance(targetNpc.Position, fatePos) <= fateRadius + 10f)
         {
             return true;
         }
@@ -583,9 +582,10 @@ public sealed partial class AutoFate
     {
         var current = Svc.Targets.Target;
         if (current is null) return;
-        if (current is IBattleNpc battleNpc && battleNpc.IsTargetable && battleNpc.CurrentHp > 0) return;
+        if (FateMobScanner.IsHostileBattleNpc(current)) return;
 
-        // Drop leftover friendly/EventNpc target (e.g. FATE starter NPC) and acquire the nearest FATE mob if available.
+        // Drop leftover friendly/EventNpc/ally BattleNpc target (e.g. FATE starter/defense NPC)
+        // and acquire the nearest hostile FATE mob if available.
         var player = Svc.Objects.LocalPlayer;
         if (player is not null && FateMobScanner.TryFindNearestMob(fateId, player.Position, out var mob, out _, out _) && mob is not null)
         {
