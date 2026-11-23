@@ -173,6 +173,7 @@ public sealed partial class AutoFate
                 sawRunning = true;
 
                 TargetForlornIfPresent();
+                ClearNonCombatTargetDuringEngage(fateId);
 
                 if (Svc.Condition[ConditionFlag.InCombat])
                     lastInCombatAtMs = Environment.TickCount64;
@@ -448,7 +449,7 @@ public sealed partial class AutoFate
             if (FateMobScanner.TryFindNearestMob(fateId, moving.Position, out var liveMob, out _, out var live)
                 && live <= reachMeters)
             {
-                if (liveMob is not null && Svc.Targets.Target is null)
+                if (liveMob is not null && Svc.Targets.Target is not IBattleNpc)
                     Svc.Targets.Target = liveMob;
                 return true;
             }
@@ -576,6 +577,24 @@ public sealed partial class AutoFate
         Diag($"Gemstone threshold {Plugin.Cfg.TradeThreshold}g reached: queueing auto-trade for {qty}× {target.ItemName} at {trader.Name} (territory {trader.TerritoryId}).");
         session.PendingTradeFromZone = zone;
         return true;
+    }
+
+    private static void ClearNonCombatTargetDuringEngage(uint fateId)
+    {
+        var current = Svc.Targets.Target;
+        if (current is null) return;
+        if (current is IBattleNpc battleNpc && battleNpc.IsTargetable && battleNpc.CurrentHp > 0) return;
+
+        // Drop leftover friendly/EventNpc target (e.g. FATE starter NPC) and acquire the nearest FATE mob if available.
+        var player = Svc.Objects.LocalPlayer;
+        if (player is not null && FateMobScanner.TryFindNearestMob(fateId, player.Position, out var mob, out _, out _) && mob is not null)
+        {
+            Svc.Targets.Target = mob;
+        }
+        else
+        {
+            Svc.Targets.Target = null;
+        }
     }
 
     private static void TargetForlornIfPresent()

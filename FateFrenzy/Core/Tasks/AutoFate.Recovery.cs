@@ -228,6 +228,10 @@ public sealed partial class AutoFate
                 skip: UiSkipOptions.Talk | UiSkipOptions.YesNo));
             await RunCancellable(interact, NpcSpawnTimeoutMs, $"activate-interact-{fate.Id}");
 
+            // Clear the friendly start NPC target as soon as the FATE activates so we don't keep targeting the NPC during combat.
+            if (Svc.Targets.Target is not null && Svc.Targets.Target is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc)
+                Svc.Targets.Target = null;
+
             // After talking to the start NPC (often standing on the outer rim of the FATE),
             // move into the center of the FATE ring so mobs spawn/render in range and combat begins immediately.
             var postFate = PublicEvent.GetFateById(fate.Id);
@@ -259,7 +263,7 @@ public sealed partial class AutoFate
                             if (FateMobScanner.TryFindNearestMob(postFate.Id, p.Position, out var foundMob, out _, out var d)
                                 && d <= reachMeters)
                             {
-                                if (Svc.Targets.Target is null && foundMob is not null)
+                                if (Svc.Targets.Target is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc && foundMob is not null)
                                     Svc.Targets.Target = foundMob;
                                 return true;
                             }
