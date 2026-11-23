@@ -344,13 +344,12 @@ public sealed partial class AutoFate
 
     private async Task<bool> TickEngagementWatchdog(uint fateId, PublicEvent fate, EngageReachTracker reach)
     {
-        if (fate.Rule == PublicEvent.FateRule.Collect) return false;
         if (Svc.Condition[ConditionFlag.Mounted]) return false;
         if (StuckDetector.IsPositionFrozenLegit()) return false;
         if (Svc.Objects.LocalPlayer is not { } player) return false;
         if (player.IsCasting) return false;
 
-        // If in combat, BMRAI is actively fighting — the player oscillating in/out of the
+        // If in combat, BMRAI/RSR is actively fighting — the player oscillating in/out of the
         // target circle is normal melee behaviour, not a stuck. Skip the watchdog entirely
         // to avoid spurious repositions that waste movement and consume the reposition budget.
         if (Svc.Condition[ConditionFlag.InCombat])
@@ -361,16 +360,37 @@ public sealed partial class AutoFate
 
         Vector3 targetPos;
         float targetDistance;
+        var movingToCenterFallback = false;
 
         if (Svc.Targets.Target is IBattleNpc targetNpc && IsValidFateTarget(targetNpc, fateId, fate.Position, fate.Radius))
         {
             targetPos = targetNpc.Position;
             targetDistance = Vector3.Distance(player.Position, targetNpc.Position);
         }
-        else if (FateMobScanner.TryFindNearestMob(fateId, player.Position, out var mobPos, out var mobDistance))
+        else if (FateMobScanner.TryFindNearestMob(fateId, player.Position, out var nearestMob, out var mobPos, out var mobDistance))
         {
+            // Explicitly acquire target so both BossMod Reborn and Rotation Solver Reborn engage immediately.
+            if (nearestMob is not null && Svc.Targets.Target?.Address != nearestMob.Address)
+                Svc.Targets.Target = nearestMob;
+
             targetPos = mobPos;
             targetDistance = mobDistance;
+        }
+        else if (fate.Rule != PublicEvent.FateRule.Escort)
+        {
+            // No FATE mob detected nearby (e.g. standing on the edge of the FATE or next to the start NPC).
+            // If we are far from the center (> 8m), walk inward to fate.Position so mobs enter range.
+            var distToCenter = Vector3.Distance(player.Position, fate.Position);
+            if (distToCenter <= 8f)
+            {
+                // Already standing near the center waiting for the next wave; don't waste reposition budget.
+                reach.Restart();
+                return false;
+            }
+
+            targetPos = fate.Position;
+            targetDistance = distToCenter;
+            movingToCenterFallback = true;
         }
         else
         {
@@ -390,22 +410,26 @@ public sealed partial class AutoFate
             return true;
         }
 
-        await RepositionToFateMob(fateId, fateName, targetPos, targetDistance, reach);
+        await RepositionToFateMob(fateId, fateName, targetPos, targetDistance, reach, movingToCenterFallback);
         reach.Restart();
         Status = $"Engaging {fateName}";
         return false;
     }
 
-    private async Task RepositionToFateMob(uint fateId, string fateName, Vector3 mobPos, float mobDistance, EngageReachTracker reach)
+    private async Task RepositionToFateMob(uint fateId, string fateName, Vector3 mobPos, float mobDistance, EngageReachTracker reach, bool movingToCenter = false)
     {
         reach.CountReposition();
-        Status = $"Closing on {fateName}";
-        Diag($"Engagement stalled on FATE {fateId} ({fateName}): nearest target {mobDistance:F0}m away (reach {reach.Meters:F0}m) with no approach in {EngageReachStallMs / 1000.0:F1}s; re-pathing with vnav (attempt {reach.Repositions}/{MaxEngageRepositions})");
+        Status = movingToCenter ? $"Moving to center of {fateName}" : $"Closing on {fateName}";
+        Diag(movingToCenter
+            ? $"No mobs in range on FATE {fateId} ({fateName}) while {mobDistance:F0}m from center; moving inward to center (attempt {reach.Repositions}/{MaxEngageRepositions})"
+            : $"Engagement stalled on FATE {fateId} ({fateName}): nearest target {mobDistance:F0}m away (reach {reach.Meters:F0}m) with no approach in {EngageReachStallMs / 1000.0:F1}s; re-pathing with vnav (attempt {reach.Repositions}/{MaxEngageRepositions})");
 
         var dest = mobPos.OnMesh();
-        var tolerance = reach.Meters <= EngageMeleeReachMeters
-            ? EngageMeleeApproachToleranceMeters
-            : EngageRangedApproachToleranceMeters;
+        var tolerance = movingToCenter
+            ? 4f
+            : reach.Meters <= EngageMeleeReachMeters
+                ? EngageMeleeApproachToleranceMeters
+                : EngageRangedApproachToleranceMeters;
         var config = MovementConfig.GroundMove.WithOptions(MovementOptions.Dismount).WithTolerance(tolerance);
         var reachMeters = reach.Meters;
 
@@ -414,14 +438,22 @@ public sealed partial class AutoFate
             var activeFate = PublicEvent.GetFateById(fateId);
             if (activeFate is not { State: FateState.Running }) return true;
             if (Svc.Objects.LocalPlayer is not { } moving) return true;
+            if (Svc.Condition[ConditionFlag.InCombat]) return true;
 
             if (Svc.Targets.Target is IBattleNpc targetNpc && IsValidFateTarget(targetNpc, fateId, activeFate.Position, activeFate.Radius))
             {
                 return Vector3.Distance(moving.Position, targetNpc.Position) <= reachMeters;
             }
 
-            return FateMobScanner.TryFindNearestMob(fateId, moving.Position, out _, out var live)
-                && live <= reachMeters;
+            if (FateMobScanner.TryFindNearestMob(fateId, moving.Position, out var liveMob, out _, out var live)
+                && live <= reachMeters)
+            {
+                if (liveMob is not null && Svc.Targets.Target is null)
+                    Svc.Targets.Target = liveMob;
+                return true;
+            }
+
+            return false;
         }
 
         var op = new MoveOp(o => o.MoveInZone(dest, config, InRangeOrGone));

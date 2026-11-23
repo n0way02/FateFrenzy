@@ -9,7 +9,11 @@ namespace FateFrenzy.Core.Game.Fates;
 internal static unsafe class FateMobScanner
 {
     public static bool TryFindNearestMob(uint fateId, Vector3 from, out Vector3 position, out float distance)
+        => TryFindNearestMob(fateId, from, out _, out position, out distance);
+
+    public static bool TryFindNearestMob(uint fateId, Vector3 from, out IBattleNpc? nearestNpc, out Vector3 position, out float distance)
     {
+        nearestNpc = null;
         position = default;
         distance = float.MaxValue;
 
@@ -29,8 +33,9 @@ internal static unsafe class FateMobScanner
 
             distance = candidate;
             position = npc.Position;
+            nearestNpc = npc;
         }
 
-        return distance < float.MaxValue;
+        return nearestNpc is not null;
     }
 }

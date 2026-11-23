@@ -1,4 +1,5 @@
 using FateFrenzy.Core.External;
+using FateFrenzy.Core.Game.Fates;
 using FateFrenzy.Core.Ipc;
 using FateFrenzy.Core.Modes;
 using FateFrenzy.Core.Trading;
@@ -226,6 +227,48 @@ public sealed partial class AutoFate
                 waitUntil: () => fate.State == FateState.Running,
                 skip: UiSkipOptions.Talk | UiSkipOptions.YesNo));
             await RunCancellable(interact, NpcSpawnTimeoutMs, $"activate-interact-{fate.Id}");
+
+            // After talking to the start NPC (often standing on the outer rim of the FATE),
+            // move into the center of the FATE ring so mobs spawn/render in range and combat begins immediately.
+            var postFate = PublicEvent.GetFateById(fate.Id);
+            var player = Svc.Objects.LocalPlayer;
+            if (postFate is { State: FateState.Running }
+                && postFate.Rule != PublicEvent.FateRule.Escort
+                && player is not null
+                && !Svc.Condition[ConditionFlag.InCombat])
+            {
+                var distToCenter = Vector3.Distance(player.Position, postFate.Position);
+                var hasMobInReach = FateMobScanner.TryFindNearestMob(postFate.Id, player.Position, out _, out _, out var mobDist)
+                                 && mobDist <= EngageReachMeters();
+
+                if (distToCenter > 10f && !hasMobInReach)
+                {
+                    Diag($"Activated FATE {postFate.Id} ({postFate.Name}) from edge ({distToCenter:F0}m from center); moving to FATE center to engage mobs.");
+                    var centerDest = postFate.Position.OnMesh();
+                    var reachMeters = EngageReachMeters();
+                    var centerOp = new MoveOp(o => o.MoveInZone(
+                        centerDest,
+                        MovementConfig.GroundMove.WithOptions(MovementOptions.Dismount).WithTolerance(4f),
+                        stopCondition: () =>
+                        {
+                            var liveF = PublicEvent.GetFateById(postFate.Id);
+                            if (liveF is not { State: FateState.Running }) return true;
+                            if (Svc.Condition[ConditionFlag.InCombat]) return true;
+                            var p = Svc.Objects.LocalPlayer;
+                            if (p is null) return true;
+                            if (FateMobScanner.TryFindNearestMob(postFate.Id, p.Position, out var foundMob, out _, out var d)
+                                && d <= reachMeters)
+                            {
+                                if (Svc.Targets.Target is null && foundMob is not null)
+                                    Svc.Targets.Target = foundMob;
+                                return true;
+                            }
+                            return false;
+                        }));
+                    await RunCancellable(centerOp, EngageRepositionWatchdogMs, $"activate-center-{postFate.Id}",
+                        StuckDetector.IdleStallAbort(StuckDetector.IdleStallTimeoutMs));
+                }
+            }
         }
         catch (Exception ex)
         {

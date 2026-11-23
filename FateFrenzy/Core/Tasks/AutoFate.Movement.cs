@@ -26,7 +26,9 @@ public sealed partial class AutoFate
         await WaitForNavmeshReady(NavmeshReadyWaitMs, 60);
         await GenerateObstacleMap(fate);
 
-        var rnd = RandomPointInsideRadius(fate.Position, fate.Radius * 0.5f);
+        // Aim close to the FATE center (max 10m scatter) instead of the outer edge so mobs are always in aggro/target range on arrival.
+        var landingScatter = MathF.Min(fate.Radius * 0.25f, 10f);
+        var rnd = RandomPointInsideRadius(fate.Position, landingScatter);
         var dest = rnd.OnMesh();
         if (dest == rnd)
             Diag($"OnMesh did not project FATE {fate.Id} dest {rnd}; vnav may struggle");
