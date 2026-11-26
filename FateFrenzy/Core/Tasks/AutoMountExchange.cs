@@ -186,12 +186,13 @@ public sealed class AutoMountExchange : AutoCommon
     {
         if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeItemDialog", out var itemDlg) && GenericHelpers.IsAddonReady(itemDlg))
         {
-            new AddonMaster.ShopExchangeItemDialog(itemDlg).Exchange();
+            // FireCallback(0) is crash-safe and confirms the exchange directly
+            Callback.Fire(itemDlg, true, 0);
             return;
         }
         if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeCurrencyDialog", out var curDlg) && GenericHelpers.IsAddonReady(curDlg))
         {
-            new AddonMaster.ShopExchangeCurrencyDialog(curDlg).Exchange();
+            Callback.Fire(curDlg, true, 0);
             return;
         }
         if (ShopInteraction.SelectYesnoOpen())
@@ -200,12 +201,16 @@ public sealed class AutoMountExchange : AutoCommon
         }
     }
 
+    private static string NormalizeShopName(string s)
+        => s.Replace('\u2019', '\'').Replace('\u2018', '\'').Trim();
+
     private static unsafe bool BuyFromExchangeItemShop(uint targetItemId)
     {
         if (!GenericHelpers.TryGetAddonByName<AtkUnitBase>("ShopExchangeItem", out var addon) || !GenericHelpers.IsAddonReady(addon))
             return false;
 
-        var targetItemName = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>()?.GetRowOrDefault(targetItemId)?.Name.ExtractText() ?? "Ty'aitya Whistle";
+        var rawTargetName = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>()?.GetRowOrDefault(targetItemId)?.Name.ExtractText() ?? "Ty'aitya Whistle";
+        var targetItemName = NormalizeShopName(rawTargetName);
 
         // Scan AtkComponentList in ShopExchangeItem for matching item name
         for (var n = 0; n < addon->UldManager.NodeListCount; n++)
@@ -225,11 +230,37 @@ public sealed class AutoMountExchange : AutoCommon
                 {
                     var child = uld->NodeList[j];
                     if (child == null || child->Type != NodeType.Text) continue;
-                    var text = ((AtkTextNode*)child)->NodeText.ToString();
+                    var text = NormalizeShopName(((AtkTextNode*)child)->NodeText.ToString());
                     if (!string.IsNullOrEmpty(text) && text.Contains(targetItemName, StringComparison.OrdinalIgnoreCase))
                     {
-                        Svc.Log.Info($"[FateFrenzy] ShopExchangeItem: found '{text}' at row {row}, firing Callback(0, {row}).");
-                        Callback.Fire(addon, true, 0, row);
+                        // ShopExchangeItem requires 3 args: (0 = exchange, row = item index, 1 = quantity)!
+                        Svc.Log.Info($"[FateFrenzy] ShopExchangeItem: found '{text}' at row {row}, firing Callback(0, {row}, 1).");
+                        Callback.Fire(addon, true, 0, row, 1);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Fallback: also scan ShopExchangeItem AtkValues for item names (handles scrolled/virtualized list items)
+        var itemCount = addon->AtkValuesCount > 1 ? addon->AtkValues[1].Int : 0;
+        if (itemCount > 0 && itemCount < 200)
+        {
+            for (var i = 0; i < itemCount; i++)
+            {
+                var nameIdx = 3 + i;
+                if (nameIdx >= addon->AtkValuesCount) break;
+                var val = addon->AtkValues[nameIdx];
+                if (val.Type is FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.String
+                    or FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.ConstString
+                    or FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.ManagedString
+                    && val.String.Value != null)
+                {
+                    var str = NormalizeShopName(Dalamud.Memory.MemoryHelper.ReadSeStringNullTerminated((nint)val.String.Value).TextValue);
+                    if (!string.IsNullOrEmpty(str) && str.Contains(targetItemName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Svc.Log.Info($"[FateFrenzy] ShopExchangeItem (AtkValues): found '{str}' at row {i}, firing Callback(0, {i}, 1).");
+                        Callback.Fire(addon, true, 0, i, 1);
                         return true;
                     }
                 }

@@ -451,8 +451,7 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
     {
         if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var addon) && GenericHelpers.IsAddonReady(addon))
         {
-            var sell = new AddonMaster.RetainerSell(addon);
-            sell.AskingPrice = price;
+            Callback.Fire(addon, true, 2, price);
             return true;
         }
         return false;
@@ -462,8 +461,9 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
     {
         if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var addon) && GenericHelpers.IsAddonReady(addon))
         {
-            var sell = new AddonMaster.RetainerSell(addon);
-            sell.Confirm();
+            // Use native AtkUnitBase FireCallback(0) instead of AddonMaster.Confirm() (ClickButtonIfEnabled),
+            // which dereferences a null AtkEventData pointer in AddonRetainerSell.ReceiveEvent+0x1B5 on Patch 7.x!
+            Callback.Fire(addon, true, 0);
             return true;
         }
         return false;
@@ -473,8 +473,7 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
     {
         if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var addon) && GenericHelpers.IsAddonReady(addon))
         {
-            var sell = new AddonMaster.RetainerSell(addon);
-            sell.Cancel();
+            Callback.Fire(addon, true, 1);
             return true;
         }
         return false;
@@ -485,9 +484,11 @@ public sealed class AutoRetainerSell(bool isUndercutOnly = false) : AutoCommon
         currentPrice = 0;
         if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("RetainerSell", out var addon) && GenericHelpers.IsAddonReady(addon))
         {
-            var sell = new AddonMaster.RetainerSell(addon);
-            currentPrice = sell.AskingPrice;
-            return true;
+            if (addon->AtkValuesCount > 5)
+            {
+                currentPrice = addon->AtkValues[5].Int;
+                return true;
+            }
         }
         return false;
     }
